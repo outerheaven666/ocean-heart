@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ThumbsUp, Star, Eye, Award } from "lucide-react";
 import { trpc } from "@/lib/trpc";
-import { getPost, getComments, isFallbackMode } from "@/lib/data";
+import { getPost, getComments, isFallbackMode, friendlyError } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
 
@@ -53,7 +53,7 @@ export default function PostDetail() {
       setDraft("");
       load();
     } catch (e: any) {
-      setError(e.message);
+      setError(friendlyError(e));
     }
   };
 

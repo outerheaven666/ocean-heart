@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
-import { getBoards } from "@/lib/data";
+import { getBoards, friendlyError } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 
 export default function NewPost() {
@@ -34,7 +34,7 @@ export default function NewPost() {
       const { id } = await trpc.posts.create.mutate({ boardSlug, title, content });
       navigate(`/post/${id}`);
     } catch (e: any) {
-      setError(e.message);
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }

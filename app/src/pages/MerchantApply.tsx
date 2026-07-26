@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/lib/auth";
+import { friendlyError } from "@/lib/data";
 
 export default function MerchantApply() {
   const { me, loading } = useAuth();
@@ -37,7 +38,7 @@ export default function MerchantApply() {
       setMsg("入驻申请已提交,平台将在 3 个工作日内完成资质核验。");
       setTimeout(() => navigate("/merchants"), 1500);
     } catch (e: any) {
-      setError(e.message);
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }

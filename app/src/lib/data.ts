@@ -9,6 +9,20 @@ export function isFallbackMode() {
   return fallbackUsed;
 }
 
+// 把接口不可用时的底层错误(404 HTML / 网络错误)转换为用户可读的提示
+export function friendlyError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (
+    fallbackUsed ||
+    msg.includes("valid JSON") ||
+    msg.includes("Unexpected token") ||
+    msg.includes("Failed to fetch") ||
+    msg.includes("NetworkError")
+  )
+    return "当前为静态演示模式,此操作需要完整后端服务。请使用本地预览(npm run dev)体验完整功能。";
+  return msg;
+}
+
 async function withFallback<T>(remote: () => Promise<T>, local: () => unknown): Promise<T> {
   try {
     return await remote();
