@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Search, ShieldAlert } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { getSpeciesCategories, getSpeciesList } from "@/lib/data";
 import { CATEGORY_LABEL, DIFFICULTY_LABEL, TEMPERAMENT_LABEL } from "@/lib/format";
 
 export type Sp = {
@@ -68,7 +68,7 @@ export default function Species() {
   const [counts, setCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
-    trpc.species.categories.query().then((rows) => {
+    getSpeciesCategories().then((rows) => {
       const m: Record<string, number> = {};
       rows.forEach((r) => (m[r.category] = r.c));
       setCounts(m);
@@ -76,14 +76,12 @@ export default function Species() {
   }, []);
 
   useEffect(() => {
-    trpc.species.list
-      .query({
-        category: (cat || undefined) as any,
-        difficulty: (diff || undefined) as any,
-        minTankMax: tank || undefined,
-        q: q.trim() || undefined,
-      })
-      .then((r) => setItems(r as Sp[]));
+    getSpeciesList({
+      category: (cat || undefined) as any,
+      difficulty: (diff || undefined) as any,
+      minTankMax: tank || undefined,
+      q: q.trim() || undefined,
+    }).then((r) => setItems(r as Sp[]));
   }, [cat, diff, tank, q]);
 
   return (

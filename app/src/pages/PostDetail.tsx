@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ThumbsUp, Star, Eye, Award } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { getPost, getComments, isFallbackMode } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
 
@@ -22,27 +23,30 @@ export default function PostDetail() {
   const [error, setError] = useState("");
 
   const load = () => {
-    trpc.posts.byId.query({ id: postId }).then((p) => setPost(p as Post));
-    trpc.comments.list.query({ postId }).then((c) => setComments(c as Comment[]));
+    getPost(postId).then((p) => setPost(p as Post));
+    getComments(postId).then((c) => setComments(c as Comment[]));
   };
   useEffect(load, [postId]);
 
   if (!post) return <p className="text-slate-400 py-10 text-center">加载中…</p>;
 
   const toggleLike = async () => {
+    if (isFallbackMode()) return setError("静态演示模式下无法点赞,需要完整后端服务");
     if (!me) return setError("请先登录");
     await trpc.posts.toggleLike.mutate({ postId });
-    const p = await trpc.posts.byId.query({ id: postId });
+    const p = await getPost(postId);
     setPost(p as Post);
   };
   const toggleFav = async () => {
+    if (isFallbackMode()) return setError("静态演示模式下无法收藏,需要完整后端服务");
     if (!me) return setError("请先登录");
     await trpc.posts.toggleFavorite.mutate({ postId });
-    const p = await trpc.posts.byId.query({ id: postId });
+    const p = await getPost(postId);
     setPost(p as Post);
   };
   const submitComment = async () => {
     setError("");
+    if (isFallbackMode()) return setError("静态演示模式下无法回帖,需要完整后端服务");
     if (!me) return setError("请先登录后再回帖");
     try {
       await trpc.comments.create.mutate({ postId, content: draft });

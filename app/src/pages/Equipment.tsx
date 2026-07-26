@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { getEquipmentCategories, getEquipmentList } from "@/lib/data";
 
 type Eq = { id: number; category: string; brand: string; model: string; keyParams: string; description: string };
 
@@ -9,10 +9,10 @@ export default function Equipment() {
   const [items, setItems] = useState<Eq[]>([]);
 
   useEffect(() => {
-    trpc.equipment.categories.query().then((r) => setCats(r));
+    getEquipmentCategories().then((r) => setCats(r));
   }, []);
   useEffect(() => {
-    trpc.equipment.list.query({ category: cat || undefined }).then((r) => setItems(r as Eq[]));
+    getEquipmentList(cat || undefined).then((r) => setItems(r as Eq[]));
   }, [cat]);
 
   return (

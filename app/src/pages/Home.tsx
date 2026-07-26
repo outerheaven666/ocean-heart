@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Search, MessageSquare, ThumbsUp, Eye, Award } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { Search, MessageSquare, ThumbsUp, Eye, Award, CloudOff } from "lucide-react";
+import { getBoards, getPosts, isFallbackMode } from "@/lib/data";
 import { fmtTime } from "@/lib/format";
 
 type Board = { id: number; slug: string; name: string; description: string; postCount: number };
@@ -42,19 +42,24 @@ export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
+  const [fallback, setFallback] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
-    trpc.boards.list.query().then((b) => setBoards(b as Board[]));
-    trpc.posts.list.query({ page: 1 }).then((r) => {
+    getBoards().then((b) => {
+      setBoards(b as Board[]);
+      setFallback(isFallbackMode());
+    });
+    getPosts({ page: 1 }).then((r) => {
       setPosts(r.items as Post[]);
       setTotal(r.total);
+      setFallback(isFallbackMode());
     });
   }, []);
 
   const search = () => {
     if (!q.trim()) return;
-    trpc.posts.list.query({ q: q.trim(), page: 1 }).then((r) => {
+    getPosts({ q: q.trim(), page: 1 }).then((r) => {
       setPosts(r.items as Post[]);
       setTotal(r.total);
     });
@@ -62,6 +67,12 @@ export default function Home() {
 
   return (
     <div className="space-y-6">
+      {fallback && (
+        <div className="flex items-center gap-2 bg-sand-100 border border-sand-300 text-sand-500 text-sm rounded-lg px-4 py-2.5">
+          <CloudOff className="w-4 h-4 shrink-0" />
+          静态演示模式:当前为内置种子数据(与本地预览内容一致),登录/发帖等交互需要完整后端服务。
+        </div>
+      )}
       {/* Hero */}
       <section className="rounded-2xl bg-gradient-to-br from-sea-900 via-sea-800 to-sea-600 text-white p-8 shadow-xl">
         <h1 className="text-2xl md:text-3xl font-bold mb-2">中国海水观赏玩家的一站式家园</h1>

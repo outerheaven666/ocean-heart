@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { BadgeCheck, Store } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { getMerchants } from "@/lib/data";
 import { fmtTime } from "@/lib/format";
 
 type M = { id: number; name: string; categories: string; address: string; intro: string; wildPermitNo: string | null; createdAt: number };
@@ -9,7 +9,7 @@ type M = { id: number; name: string; categories: string; address: string; intro:
 export default function Merchants() {
   const [items, setItems] = useState<M[]>([]);
   useEffect(() => {
-    trpc.merchants.list.query().then((r) => setItems(r as M[]));
+    getMerchants().then((r) => setItems(r as M[]));
   }, []);
 
   return (

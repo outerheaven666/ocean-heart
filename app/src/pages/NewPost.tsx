@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
+import { getBoards } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 
 export default function NewPost() {
@@ -14,7 +15,7 @@ export default function NewPost() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    trpc.boards.list.query().then((b) => setBoards(b));
+    getBoards().then((b) => setBoards(b));
   }, []);
 
   if (loading) return <p className="text-slate-400 py-10 text-center">加载中…</p>;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { trpc } from "@/lib/trpc";
+import { getWaterParams } from "@/lib/data";
 import { TANK_TYPE_LABEL } from "@/lib/format";
 
 type Row = { id: number; param: string; unit: string; tankType: string; minVal: string; maxVal: string; target: string; note: string };
@@ -10,7 +10,7 @@ export default function Water() {
   const [rows, setRows] = useState<Row[]>([]);
 
   useEffect(() => {
-    trpc.waterParams.list.query({ tankType: type }).then((r) => setRows(r as Row[]));
+    getWaterParams(type).then((r) => setRows(r as Row[]));
   }, [type]);
 
   return (

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { trpc } from "@/lib/trpc";
+import { getBoards, getPosts } from "@/lib/data";
 import { PostItem } from "./Home";
 
 type Post = Parameters<typeof PostItem>[0]["p"];
@@ -18,12 +18,12 @@ export default function Board() {
   }, [slug]);
 
   useEffect(() => {
-    trpc.posts.list.query({ boardSlug: slug, page }).then((r) => {
+    getPosts({ boardSlug: slug, page }).then((r) => {
       setPosts(r.items as Post[]);
       setTotal(r.total);
       if (r.items[0]) setBoardName(r.items[0].boardName);
     });
-    trpc.boards.list.query().then((bs) => {
+    getBoards().then((bs) => {
       const b = bs.find((x) => x.slug === slug);
       if (b) setBoardName(b.name);
     });

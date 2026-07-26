@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
-import { trpc } from "@/lib/trpc";
+import { getSpeciesById } from "@/lib/data";
 import { CATEGORY_LABEL, DIFFICULTY_LABEL, TRADE_LABEL, TEMPERAMENT_LABEL, fmtTime } from "@/lib/format";
 
 type Detail = {
@@ -27,7 +27,7 @@ export default function SpeciesDetail() {
   const [sp, setSp] = useState<Detail | null>(null);
 
   useEffect(() => {
-    trpc.species.byId.query({ id: Number(id) }).then((r) => setSp(r as unknown as Detail));
+    getSpeciesById(Number(id)).then((r) => setSp(r as unknown as Detail));
   }, [id]);
 
   if (!sp) return <p className="text-slate-400 py-10 text-center">加载中…</p>;
