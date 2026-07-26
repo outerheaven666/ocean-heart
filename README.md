@@ -4,6 +4,14 @@
 
 依据 `plan.md` 与 `海洋之心-执行方案.md` 实施的 Stage 3–5 交付物:可部署上线的全栈 Web 应用。
 
+## 线上地址
+
+- **代码仓库**:https://github.com/outerheaven666/ocean-heart
+- **静态预览**(GitHub Pages,仅前端界面,数据接口需后端服务):https://outerheaven666.github.io/ocean-heart/
+- **CI**:每次 push 自动运行后端 19 项冒烟测试 + 前端构建(`.github/workflows/ci.yml`)
+
+> 完整功能(登录/发帖/资料库数据)需要运行后端服务。生产部署:`npm run build && npm start`(单端口 3001,后端托管前端产物),数据库默认 SQLite,可平滑切换 MySQL。
+
 ## 技术栈
 
 | 层 | 技术 |
