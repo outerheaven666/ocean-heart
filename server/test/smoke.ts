@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { appRouter, createContext } from "../src/trpc/router.js";
 import { seedIfEmpty } from "../src/db/seed.js";
 
-seedIfEmpty();
+await seedIfEmpty();
 
 let passed = 0;
 function ok(name: string) {
@@ -10,7 +10,7 @@ function ok(name: string) {
   console.log(`  ✓ ${name}`);
 }
 
-const anon = appRouter.createCaller(createContext({}));
+const anon = appRouter.createCaller(await createContext({}));
 
 // 1. 基础数据
 const boards = await anon.boards.list();
@@ -44,7 +44,7 @@ ok(`保护物种合规标注 (${prohibited.length} 个物种标记禁止交易)`
 const reg = await anon.auth.register({ username: "smoketest", password: "test123456", nickname: "冒烟测试员" });
 assert.ok(reg.token);
 ok("注册新用户");
-let authed = appRouter.createCaller(createContext({ authorization: `Bearer ${reg.token}` }));
+let authed = appRouter.createCaller(await createContext({ authorization: `Bearer ${reg.token}` }));
 
 let realNameBlocked = false;
 try {
@@ -57,7 +57,7 @@ ok("未实名禁止发帖(实名制拦截)");
 
 await authed.auth.setRealName({ realName: "测试实名" });
 // 实名后重新建立会话上下文(等价于下一次 HTTP 请求重新加载用户)
-authed = appRouter.createCaller(createContext({ authorization: `Bearer ${reg.token}` }));
+authed = appRouter.createCaller(await createContext({ authorization: `Bearer ${reg.token}` }));
 ok("个人中心实名登记");
 
 // 4. 合规:二手区敏感词先审后发

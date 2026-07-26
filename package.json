@@ -2,6 +2,7 @@
   "name": "ocean-heart",
   "version": "1.0.0",
   "private": true,
+  "type": "module",
   "description": "海洋之心 —— 海水观赏玩家社区(论坛 + 生物资料库 + 水质速查 + 设备库 + 合规商家)",
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -9,5 +10,16 @@
     "start": "npm --prefix server run start",
     "seed": "npm --prefix server run seed",
     "test": "npm --prefix server run smoke"
+  },
+  "dependencies": {
+    "@hono/trpc-server": "^0.3.4",
+    "@libsql/client": "^0.14.0",
+    "@trpc/server": "^11.0.0",
+    "drizzle-orm": "^0.38.3",
+    "hono": "^4.6.14",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1"
   }
 }

@@ -1,0 +1,17 @@
+{
+  "type": "web_service",
+  "name": "ocean-heart",
+  "ownerId": "tea-d9j2f8vaqgkc73asbn2g",
+  "repo": "https://github.com/outerheaven666/ocean-heart",
+  "autoDeploy": "yes",
+  "branch": "main",
+  "serviceDetails": {
+    "runtime": "node",
+    "plan": "free",
+    "region": "singapore",
+    "envSpecificDetails": {
+      "buildCommand": "npm --prefix server ci --include=dev && npm --prefix app ci --include=dev && npm --prefix app run build",
+      "startCommand": "npm --prefix server run start"
+    }
+  }
+}

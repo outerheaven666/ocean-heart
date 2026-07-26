@@ -10,11 +10,11 @@ export interface Context {
   [key: string]: unknown;
 }
 
-export function createContext(headers: Record<string, string | string[] | undefined>): Context {
+export async function createContext(headers: Record<string, string | string[] | undefined>): Promise<Context> {
   const auth = headers["authorization"];
   const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
   if (!token) return { user: null };
-  const row = db
+  const row = await db
     .select({ user: schema.users })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
@@ -46,8 +46,8 @@ const TRADE_BANNED_WORDS = [
   "海马", "海龟", "sps", "lps", "硬骨", "cites",
 ];
 
-function checkTradeCompliance(boardId: number, text: string) {
-  const board = db.select().from(schema.boards).where(eq(schema.boards.id, boardId)).get();
+async function checkTradeCompliance(boardId: number, text: string) {
+  const board = await db.select().from(schema.boards).where(eq(schema.boards.id, boardId)).get();
   if (board?.slug !== "trade") return;
   const lower = text.toLowerCase();
   const hit = TRADE_BANNED_WORDS.find((w) => lower.includes(w.toLowerCase()));
@@ -65,44 +65,44 @@ export const appRouter = t.router({
   auth: t.router({
     register: publicProc
       .input(z.object({ username: z.string().min(3).max(20), password: z.string().min(6), nickname: z.string().min(1).max(20) }))
-      .mutation(({ input }) => {
-        const exists = db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
+      .mutation(async ({ input }) => {
+        const exists = await db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
         if (exists) throw new TRPCError({ code: "CONFLICT", message: "用户名已存在" });
         const salt = randomBytes(8).toString("hex");
-        const id = db
+        const id = Number((await db
           .insert(schema.users)
           .values({ username: input.username, passwordHash: `${salt}:${hashPassword(input.password, salt)}`, nickname: input.nickname, createdAt: Date.now() })
-          .run().lastInsertRowid as number;
+          .run()).lastInsertRowid);
         const token = randomBytes(24).toString("hex");
-        db.insert(schema.sessions).values({ token, userId: id, createdAt: Date.now() }).run();
+        await db.insert(schema.sessions).values({ token, userId: id, createdAt: Date.now() }).run();
         return { token, user: { id, username: input.username, nickname: input.nickname, role: "user" as const, realName: null } };
       }),
     login: publicProc
       .input(z.object({ username: z.string(), password: z.string() }))
-      .mutation(({ input }) => {
-        const user = db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
+      .mutation(async ({ input }) => {
+        const user = await db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
         if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "用户名或密码错误" });
         const [salt, stored] = user.passwordHash.split(":");
         const candidate = hashPassword(input.password, salt);
         const ok = timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(candidate, "hex"));
         if (!ok) throw new TRPCError({ code: "UNAUTHORIZED", message: "用户名或密码错误" });
         const token = randomBytes(24).toString("hex");
-        db.insert(schema.sessions).values({ token, userId: user.id, createdAt: Date.now() }).run();
+        await db.insert(schema.sessions).values({ token, userId: user.id, createdAt: Date.now() }).run();
         return { token, user: { id: user.id, username: user.username, nickname: user.nickname, role: user.role, realName: user.realName } };
       }),
-    me: authedProc.query(({ ctx }) => {
+    me: authedProc.query(async ({ ctx }) => {
       const { id, username, nickname, role, realName, createdAt } = ctx.user;
       return { id, username, nickname, role, realName, createdAt };
     }),
-    setRealName: authedProc.input(z.object({ realName: z.string().min(2).max(30) })).mutation(({ ctx, input }) => {
-      db.update(schema.users).set({ realName: input.realName }).where(eq(schema.users.id, ctx.user.id)).run();
+    setRealName: authedProc.input(z.object({ realName: z.string().min(2).max(30) })).mutation(async ({ ctx, input }) => {
+      await db.update(schema.users).set({ realName: input.realName }).where(eq(schema.users.id, ctx.user.id)).run();
       return { ok: true };
     }),
   }),
 
   // ---------- 版块 ----------
   boards: t.router({
-    list: publicProc.query(() =>
+    list: publicProc.query(async () =>
       db
         .select({
           id: schema.boards.id,
@@ -122,17 +122,17 @@ export const appRouter = t.router({
   posts: t.router({
     list: publicProc
       .input(z.object({ boardSlug: z.string().optional(), q: z.string().optional(), page: z.number().min(1).default(1) }))
-      .query(({ input }) => {
+      .query(async ({ input }) => {
         const conds = [];
         if (input.boardSlug) {
-          const board = db.select().from(schema.boards).where(eq(schema.boards.slug, input.boardSlug)).get();
+          const board = await db.select().from(schema.boards).where(eq(schema.boards.slug, input.boardSlug)).get();
           if (!board) return { items: [], total: 0, page: input.page, pageSize: PAGE_SIZE };
           conds.push(eq(schema.posts.boardId, board.id));
         }
         if (input.q) conds.push(or(like(schema.posts.title, `%${input.q}%`), like(schema.posts.content, `%${input.q}%`)));
         const where = conds.length ? and(...conds) : undefined;
-        const total = db.select({ c: sql<number>`count(*)` }).from(schema.posts).where(where).get()?.c ?? 0;
-        const items = db
+        const total = (await db.select({ c: sql<number>`count(*)` }).from(schema.posts).where(where).get())?.c ?? 0;
+        const items = await db
           .select({
             id: schema.posts.id,
             title: schema.posts.title,
@@ -156,9 +156,9 @@ export const appRouter = t.router({
           .all();
         return { items, total, page: input.page, pageSize: PAGE_SIZE };
       }),
-    byId: publicProc.input(z.object({ id: z.number() })).query(({ input, ctx }) => {
-      db.update(schema.posts).set({ views: sql`${schema.posts.views} + 1` }).where(eq(schema.posts.id, input.id)).run();
-      const post = db
+    byId: publicProc.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
+      await db.update(schema.posts).set({ views: sql`${schema.posts.views} + 1` }).where(eq(schema.posts.id, input.id)).run();
+      const post = await db
         .select({
           id: schema.posts.id,
           title: schema.posts.title,
@@ -188,29 +188,29 @@ export const appRouter = t.router({
     }),
     create: verifiedProc
       .input(z.object({ boardSlug: z.string(), title: z.string().min(2).max(80), content: z.string().min(5).max(20000) }))
-      .mutation(({ ctx, input }) => {
-        const board = db.select().from(schema.boards).where(eq(schema.boards.slug, input.boardSlug)).get();
+      .mutation(async ({ ctx, input }) => {
+        const board = await db.select().from(schema.boards).where(eq(schema.boards.slug, input.boardSlug)).get();
         if (!board) throw new TRPCError({ code: "NOT_FOUND", message: "版块不存在" });
-        checkTradeCompliance(board.id, input.title + "\n" + input.content);
-        const id = db
+        await checkTradeCompliance(board.id, input.title + "\n" + input.content);
+        const id = Number((await db
           .insert(schema.posts)
           .values({ boardId: board.id, userId: ctx.user.id, title: input.title, content: input.content, createdAt: Date.now() })
-          .run().lastInsertRowid as number;
+          .run()).lastInsertRowid);
         return { id };
       }),
-    toggleLike: authedProc.input(z.object({ postId: z.number() })).mutation(({ ctx, input }) => {
-      const existing = db.select().from(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).get();
+    toggleLike: authedProc.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      const existing = await db.select().from(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).get();
       if (existing) db.delete(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).run();
       else db.insert(schema.likes).values({ userId: ctx.user.id, postId: input.postId }).run();
       return { liked: !existing };
     }),
-    toggleFavorite: authedProc.input(z.object({ postId: z.number() })).mutation(({ ctx, input }) => {
-      const existing = db.select().from(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).get();
+    toggleFavorite: authedProc.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
+      const existing = await db.select().from(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).get();
       if (existing) db.delete(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).run();
       else db.insert(schema.favorites).values({ userId: ctx.user.id, postId: input.postId }).run();
       return { favorited: !existing };
     }),
-    mine: authedProc.query(({ ctx }) =>
+    mine: authedProc.query(async ({ ctx }) =>
       db
         .select({ id: schema.posts.id, title: schema.posts.title, createdAt: schema.posts.createdAt, views: schema.posts.views })
         .from(schema.posts)
@@ -218,7 +218,7 @@ export const appRouter = t.router({
         .orderBy(desc(schema.posts.createdAt))
         .all()
     ),
-    myFavorites: authedProc.query(({ ctx }) =>
+    myFavorites: authedProc.query(async ({ ctx }) =>
       db
         .select({ id: schema.posts.id, title: schema.posts.title, createdAt: schema.posts.createdAt, views: schema.posts.views })
         .from(schema.favorites)
@@ -231,7 +231,7 @@ export const appRouter = t.router({
 
   // ---------- 评论 ----------
   comments: t.router({
-    list: publicProc.input(z.object({ postId: z.number() })).query(({ input }) =>
+    list: publicProc.input(z.object({ postId: z.number() })).query(async ({ input }) =>
       db
         .select({ id: schema.comments.id, content: schema.comments.content, createdAt: schema.comments.createdAt, author: schema.users.nickname, authorRole: schema.users.role })
         .from(schema.comments)
@@ -242,11 +242,11 @@ export const appRouter = t.router({
     ),
     create: verifiedProc
       .input(z.object({ postId: z.number(), content: z.string().min(1).max(5000) }))
-      .mutation(({ ctx, input }) => {
-        const post = db.select().from(schema.posts).where(eq(schema.posts.id, input.postId)).get();
+      .mutation(async ({ ctx, input }) => {
+        const post = await db.select().from(schema.posts).where(eq(schema.posts.id, input.postId)).get();
         if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "帖子不存在" });
-        checkTradeCompliance(post.boardId, input.content);
-        const id = db.insert(schema.comments).values({ postId: input.postId, userId: ctx.user.id, content: input.content, createdAt: Date.now() }).run().lastInsertRowid as number;
+        await checkTradeCompliance(post.boardId, input.content);
+        const id = Number((await db.insert(schema.comments).values({ postId: input.postId, userId: ctx.user.id, content: input.content, createdAt: Date.now() }).run()).lastInsertRowid);
         return { id };
       }),
   }),
@@ -263,7 +263,7 @@ export const appRouter = t.router({
           q: z.string().optional(),
         })
       )
-      .query(({ input }) => {
+      .query(async ({ input }) => {
         const conds = [];
         if (input.category) conds.push(eq(schema.species.category, input.category));
         if (input.difficulty) conds.push(eq(schema.species.difficulty, input.difficulty));
@@ -277,13 +277,13 @@ export const appRouter = t.router({
               like(schema.species.scientificName, `%${input.q}%`)
             )
           );
-        return db.select().from(schema.species).where(conds.length ? and(...conds) : undefined).orderBy(schema.species.category, schema.species.id).all();
+        return await db.select().from(schema.species).where(conds.length ? and(...conds) : undefined).orderBy(schema.species.category, schema.species.id).all();
       }),
-    byId: publicProc.input(z.object({ id: z.number() })).query(({ input }) => {
-      const sp = db.select().from(schema.species).where(eq(schema.species.id, input.id)).get();
+    byId: publicProc.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const sp = await db.select().from(schema.species).where(eq(schema.species.id, input.id)).get();
       if (!sp) throw new TRPCError({ code: "NOT_FOUND", message: "物种不存在" });
       // 资料卡与论坛帖双向联动:聚合标题/内容提及该物种的帖子
-      const related = db
+      const related = await db
         .select({ id: schema.posts.id, title: schema.posts.title, createdAt: schema.posts.createdAt })
         .from(schema.posts)
         .where(or(like(schema.posts.title, `%${sp.commonNameZh.split("(")[0]}%`), like(schema.posts.content, `%${sp.commonNameZh.split("(")[0]}%`)))
@@ -291,36 +291,36 @@ export const appRouter = t.router({
         .all();
       return { ...sp, detail: JSON.parse(sp.detail || "{}"), relatedPosts: related };
     }),
-    categories: publicProc.query(() => {
-      const rows = db.select({ category: schema.species.category, c: sql<number>`count(*)` }).from(schema.species).groupBy(schema.species.category).all();
+    categories: publicProc.query(async () => {
+      const rows = await db.select({ category: schema.species.category, c: sql<number>`count(*)` }).from(schema.species).groupBy(schema.species.category).all();
       return rows;
     }),
   }),
 
   // ---------- 水质速查 ----------
   waterParams: t.router({
-    list: publicProc.input(z.object({ tankType: z.enum(["reef", "fowlr", "fot", "sps"]).optional() })).query(({ input }) =>
-      db.select().from(schema.waterParams).where(input.tankType ? eq(schema.waterParams.tankType, input.tankType) : undefined).all()
+    list: publicProc.input(z.object({ tankType: z.enum(["reef", "fowlr", "fot", "sps"]).optional() })).query(async ({ input }) =>
+      await db.select().from(schema.waterParams).where(input.tankType ? eq(schema.waterParams.tankType, input.tankType) : undefined).all()
     ),
   }),
 
   // ---------- 设备资料库 ----------
   equipment: t.router({
-    list: publicProc.input(z.object({ category: z.string().optional() })).query(({ input }) =>
-      db.select().from(schema.equipment).where(input.category ? eq(schema.equipment.category, input.category) : undefined).all()
+    list: publicProc.input(z.object({ category: z.string().optional() })).query(async ({ input }) =>
+      await db.select().from(schema.equipment).where(input.category ? eq(schema.equipment.category, input.category) : undefined).all()
     ),
-    categories: publicProc.query(() =>
-      db.select({ category: schema.equipment.category, c: sql<number>`count(*)` }).from(schema.equipment).groupBy(schema.equipment.category).all()
+    categories: publicProc.query(async () =>
+      await db.select({ category: schema.equipment.category, c: sql<number>`count(*)` }).from(schema.equipment).groupBy(schema.equipment.category).all()
     ),
   }),
 
   // ---------- 商家入驻与展示 ----------
   merchants: t.router({
-    list: publicProc.query(() =>
-      db.select().from(schema.merchants).where(eq(schema.merchants.status, "approved")).orderBy(desc(schema.merchants.createdAt)).all()
+    list: publicProc.query(async () =>
+      await db.select().from(schema.merchants).where(eq(schema.merchants.status, "approved")).orderBy(desc(schema.merchants.createdAt)).all()
     ),
-    byId: publicProc.input(z.object({ id: z.number() })).query(({ input }) => {
-      const m = db.select().from(schema.merchants).where(and(eq(schema.merchants.id, input.id), eq(schema.merchants.status, "approved"))).get();
+    byId: publicProc.input(z.object({ id: z.number() })).query(async ({ input }) => {
+      const m = await db.select().from(schema.merchants).where(and(eq(schema.merchants.id, input.id), eq(schema.merchants.status, "approved"))).get();
       if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "商家不存在或未通过认证" });
       return m;
     }),
@@ -335,15 +335,15 @@ export const appRouter = t.router({
           intro: z.string().max(2000).optional(),
         })
       )
-      .mutation(({ ctx, input }) => {
-        const id = db
+      .mutation(async ({ ctx, input }) => {
+        const id = Number((await db
           .insert(schema.merchants)
           .values({ userId: ctx.user.id, name: input.name, categories: input.categories, licenseNo: input.licenseNo, wildPermitNo: input.wildPermitNo ?? null, address: input.address ?? "", intro: input.intro ?? "", createdAt: Date.now() })
-          .run().lastInsertRowid as number;
+          .run()).lastInsertRowid);
         return { id, status: "pending" as const };
       }),
-    myApplication: authedProc.query(({ ctx }) =>
-      db.select().from(schema.merchants).where(eq(schema.merchants.userId, ctx.user.id)).orderBy(desc(schema.merchants.createdAt)).limit(1).get() ?? null
+    myApplication: authedProc.query(async ({ ctx }) =>
+      await db.select().from(schema.merchants).where(eq(schema.merchants.userId, ctx.user.id)).orderBy(desc(schema.merchants.createdAt)).limit(1).get() ?? null
     ),
   }),
 });

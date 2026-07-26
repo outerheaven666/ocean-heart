@@ -1,20 +1,27 @@
-import Database from "better-sqlite3";
-import { drizzle } from "drizzle-orm/better-sqlite3";
+import { createClient } from "@libsql/client";
+import { drizzle } from "drizzle-orm/libsql";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as schema from "./schema.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dataDir = path.join(__dirname, "..", "..", "data");
-mkdirSync(dataDir, { recursive: true });
 
-const sqlite = new Database(path.join(dataDir, "ocean-heart.db"));
-sqlite.pragma("journal_mode = WAL");
-sqlite.pragma("foreign_keys = ON");
+// 本地开发:SQLite 文件;生产(Vercel):Turso 云端 libsql —— 同一套 Drizzle schema 无缝切换
+function resolveUrl() {
+  if (process.env.TURSO_DATABASE_URL) return process.env.TURSO_DATABASE_URL;
+  const dataDir = path.join(__dirname, "..", "..", "data");
+  mkdirSync(dataDir, { recursive: true });
+  return "file:" + path.join(dataDir, "ocean-heart.db").replace(/\\/g, "/");
+}
+
+export const client = createClient({
+  url: resolveUrl(),
+  authToken: process.env.TURSO_AUTH_TOKEN,
+});
 
 // 轻量 DDL 迁移(CREATE TABLE IF NOT EXISTS),与 drizzle schema 保持一致
-sqlite.exec(`
+const DDL = `
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT NOT NULL UNIQUE,
@@ -112,7 +119,16 @@ CREATE TABLE IF NOT EXISTS forum_links (
   species_id INTEGER NOT NULL,
   post_id INTEGER NOT NULL
 );
-`);
+`;
 
-export const db = drizzle(sqlite, { schema });
+// 数据库初始化(建表)。任何查询发生前必须 await dbReady
+export const dbReady: Promise<void> = client
+  .executeMultiple(DDL)
+  .then(() => {})
+  .catch((err) => {
+    console.error("[ocean-heart] database init failed:", err);
+    throw err;
+  });
+
+export const db = drizzle(client, { schema });
 export { schema };

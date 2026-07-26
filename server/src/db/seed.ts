@@ -1,24 +1,25 @@
 import { scryptSync, randomBytes } from "node:crypto";
-import { db, schema } from "./index.js";
+import { db, dbReady, schema } from "./index.js";
 
 function hash(password: string, salt: string) {
   return scryptSync(password, salt, 32).toString("hex");
 }
 
-export function seedIfEmpty() {
-  const hasSpecies = db.select().from(schema.species).limit(1).all().length > 0;
+export async function seedIfEmpty() {
+  await dbReady;
+  const hasSpecies = (await db.select().from(schema.species).limit(1).all()).length > 0;
   if (hasSpecies) return false;
   seed();
   return true;
 }
 
-export function seed() {
+export async function seed() {
   const now = Date.now();
 
   // ---------- 用户 ----------
   const saltA = randomBytes(8).toString("hex");
   const saltU = randomBytes(8).toString("hex");
-  const adminId = db
+  const adminId = Number((await db
     .insert(schema.users)
     .values({
       username: "admin",
@@ -28,8 +29,8 @@ export function seed() {
       role: "admin",
       createdAt: now,
     })
-    .run().lastInsertRowid as number;
-  const userId = db
+    .run()).lastInsertRowid);
+  const userId = Number((await db
     .insert(schema.users)
     .values({
       username: "reefer",
@@ -39,7 +40,7 @@ export function seed() {
       role: "user",
       createdAt: now,
     })
-    .run().lastInsertRowid as number;
+    .run()).lastInsertRowid);
 
   // ---------- 版块 ----------
   const boardDefs = [
@@ -54,12 +55,12 @@ export function seed() {
     ["vendor", "商家区", "认证商家新品与活动"],
   ] as const;
   const boardIds: Record<string, number> = {};
-  boardDefs.forEach(([slug, name, description], i) => {
-    boardIds[slug] = db
+  for (const [i, [slug, name, description]] of boardDefs.entries()) {
+    boardIds[slug] = Number((await db
       .insert(schema.boards)
       .values({ slug, name, description, sort: i })
-      .run().lastInsertRowid as number;
-  });
+      .run()).lastInsertRowid);
+  }
 
   // ---------- 生物资料库种子数据(自建编译,字段级溯源) ----------
   const SRC = "海洋之心资料库·基于公开文献与玩家社群资料自行整理编译";
@@ -108,7 +109,7 @@ export function seed() {
     { scientificName: "Calcinus elegans", commonNameZh: "蓝脚寄居蟹", commonNameEn: "Electric Blue Hermit Crab", category: "invert", difficulty: "easy", temperament: "semi-aggressive", maxSizeCm: 4, minTankL: 30, diet: "杂食,残饵藻类", reefSafeCoral: 1, reefSafeInvert: 0, distribution: "印度-太平洋", description: "会攻击螺类抢占壳,需要提供备用空壳。", protectionLevel: "无", tradeStatus: "tradable", detail: JSON.stringify({ utility: "清洁残饵" }), dataSource: SRC },
     { scientificName: "Entacmaea quadricolor", commonNameZh: "奶嘴海葵(气泡海葵)", commonNameEn: "Bubble Tip Anemone", category: "invert", difficulty: "moderate", temperament: "", maxSizeCm: 30, minTankL: 100, diet: "光合+虾肉喂食", reefSafeCoral: 0, reefSafeInvert: 1, distribution: "印度-太平洋", description: "小丑鱼的经典宿主,会移动位置,成熟稳定缸再引入。", protectionLevel: "无", tradeStatus: "tradable", detail: JSON.stringify({ lightPAR: "200-300", hostFor: "双锯鱼属" }), dataSource: SRC },
   ];
-  db.insert(schema.species).values([...fish, ...corals, ...inverts]).run();
+  await db.insert(schema.species).values([...fish, ...corals, ...inverts]).run();
 
   // ---------- 水质参数 11 参数 x 4 缸型 ----------
   type W = typeof schema.waterParams.$inferInsert;
@@ -130,7 +131,7 @@ export function seed() {
   add("氨 NH3/NH4", "ppm", ["0", "0", "0"], ["0", "0", "0"], ["0", "0", "0"], ["0", "0", "0"], "任何可检出的氨都是危险信号");
   add("亚硝酸盐 NO2", "ppm", ["0", "0", "0"], ["0", "0", "0"], ["0", "0", "0"], ["0", "0", "0"], "开缸期指标,成熟缸应始终为零");
   add("溶氧", "mg/L", ["6", "9", "7-8"], ["5", "9", "6-8"], ["5", "9", "6-8"], ["6", "9", "7-8"], "夜间溶氧最低,注意通风与水面扰动");
-  db.insert(schema.waterParams).values(rows).run();
+  await db.insert(schema.waterParams).values(rows).run();
 
   // ---------- 设备资料库 ----------
   type E = typeof schema.equipment.$inferInsert;
@@ -152,10 +153,10 @@ export function seed() {
     { category: "滴定", brand: "美国 Neptune", model: "DOS", keyParams: JSON.stringify({ 通道: "2通道可扩展", 联动: "Apex 生态", 精度: "0.1ml" }), description: "配合 Apex 实现全自动水质管理。" },
     { category: "检疫缸", brand: "通用配置", model: "40-60L 简易检疫缸", keyParams: JSON.stringify({ 建议容积: "40-60L", 配置: "加热棒+气石+躲避管", 周期: "新鱼4-6周" }), description: "新鱼入缸前隔离检疫,是降低鱼病损耗最重要的一步。" },
   ];
-  db.insert(schema.equipment).values(eqs).run();
+  await db.insert(schema.equipment).values(eqs).run();
 
   // ---------- 商家(一个已通过认证的示例商家) ----------
-  db.insert(schema.merchants).values({
+  await db.insert(schema.merchants).values({
     userId: adminId,
     name: "蓝海之光水族器材",
     categories: "珊瑚灯具 / 蛋分 / 耗材",
@@ -168,44 +169,44 @@ export function seed() {
   }).run();
 
   // ---------- 精华帖种子内容 ----------
-  const post1 = db.insert(schema.posts).values({
+  const post1 = Number((await db.insert(schema.posts).values({
     boardId: boardIds.newbie, userId: adminId, isEssence: 1,
     title: "【精华】新手开缸全流程:从空缸到闯缸鱼的 45 天",
     content: "第一天:缸体定位、底柜调平、粘缸检查。\n第 1-7 天:RO 水化盐(盐度 1.025),活石/造景石入缸,开灯每天 4 小时。\n第 7-21 天:氨氮循环期,每日测氨/亚硝酸盐,出现褐藻属正常。\n第 21-35 天:亚硝酸盐归零后下第一批工具生物(马蹄螺、清洁虾)。\n第 35-45 天:水质稳定(KH 8-9、NO3<10)后下闯缸鱼(青魔/公子小丑),每周换水 10%。\n常见翻车点:心急下鱼、自来水直接化盐、蛋分过早开。",
     createdAt: now - 86400000 * 6,
-  }).run().lastInsertRowid as number;
-  db.insert(schema.posts).values({
+  }).run()).lastInsertRowid);
+  await db.insert(schema.posts).values({
     boardId: boardIds.water, userId: adminId, isEssence: 1,
     title: "【精华】水质入门:11 个参数里真正要每天盯的只有 3 个",
     content: "每天盯:温度、盐度(蒸发补水)、KH。\n每周测:NO3、PO4、钙、镁。\n每月或出问题再测:pH、氨、亚硝酸盐、溶氧。\n为什么 KH 优先:KH 是海缸的『缓冲垫』,KH 稳则 pH 稳、珊瑚钙化稳。SPS 缸 KH 日波动应 <0.5dKH。\n换水是最万能的调理手段:10-20% 每周,胜过一切药瓶。",
     createdAt: now - 86400000 * 5,
-  }).run().lastInsertRowid as number;
-  db.insert(schema.posts).values({
+  }).run();
+  await db.insert(schema.posts).values({
     boardId: boardIds.disease, userId: adminId, isEssence: 1,
     title: "【精华】常见病图鉴:白点、飞碟虫、烂身病的鉴别与处置",
     content: "白点病(刺激隐核虫):体表细小白点,鱼蹭缸、呼吸急促。处置:检疫缸铜药治疗 14 天,主缸空缸 6 周断生命周期。注意:下铜前必须移出所有无脊椎动物。\n飞碟虫(卵圆鞭毛虫):金褐色粉末状斑点,比白点更致命,发展极快,需立即铜药+甲醛浴。\n烂身病(细菌性):鳍条溃烂、体表充血,多为水质恶化继发,先换水再用抗生素药浴。\n铁律:新鱼必须检疫 4-6 周,这是把鱼病挡在主缸外的唯一办法。",
     createdAt: now - 86400000 * 4,
-  }).run().lastInsertRowid as number;
-  db.insert(schema.posts).values({
+  }).run();
+  await db.insert(schema.posts).values({
     boardId: boardIds.newbie, userId: adminId, isEssence: 1,
     title: "【合规必读】这些生物买卖可能违法:石珊瑚、砗磲、海马",
     content: "石珊瑚目所有种(鹿角珊瑚、脑珊瑚、榔头等 LPS/SPS)= 国家二级保护动物 + CITES 附录Ⅱ,无论活体死体甚至碎枝滤材都在管制范围。\n砗磲科所有种、海龟、海马同属保护名录。\n平台规则:二手置换版块发布上述物种信息将被直接删除并记录;认证活体商家必须上传《水生野生动物经营利用许可证》。\n已有玩家因购买保护物种被追诉的真实案例,请务必重视。",
     createdAt: now - 86400000 * 3,
-  }).run().lastInsertRowid as number;
-  db.insert(schema.posts).values({
+  }).run();
+  await db.insert(schema.posts).values({
     boardId: boardIds.showcase, userId, isEssence: 0,
     title: "晒缸:90cm 混养缸满月记录",
     content: "开缸第 30 天,KH 稳定在 8.5,NO3 约 5ppm。目前生物:公子小丑一对、青魔×5、美人虾×2、马蹄螺×8。纽扣已经开始发色,晒张全家福(图后补)。欢迎指正!",
     createdAt: now - 86400000 * 2,
-  }).run().lastInsertRowid as number;
-  db.insert(schema.posts).values({
+  }).run();
+  await db.insert(schema.posts).values({
     boardId: boardIds.disease, userId, isEssence: 0,
     title: "求助:蓝吊身上出现白点,呼吸有点急",
     content: "缸龄 4 个月,90 缸。三天前进的蓝吊,今早发现胸鳍有十几个白点,蹭活石。其他鱼正常。盐度 1.024,温度 26,KH 8。需要先捞出来进检疫缸吗?缸里有清洁虾和螺,能下铜药吗?",
     createdAt: now - 86400000 * 1,
-  }).run().lastInsertRowid as number;
+  }).run();
 
-  db.insert(schema.comments).values([
+  await db.insert(schema.comments).values([
     { postId: post1, userId, content: "感谢整理!按这个节奏开的缸,第 40 天水质全绿,前来还愿。", createdAt: now - 86400000 * 2 },
     { postId: post1, userId: adminId, content: "补充:夏天开缸注意冷水机,温度波动是新手第一杀手。", createdAt: now - 86400000 * 2 },
   ]).run();
@@ -215,6 +216,6 @@ export function seed() {
 
 // 直接运行时强制重建种子(仅当库为空;需重置请删除 data/ocean-heart.db)
 if (import.meta.url === `file://${process.argv[1]}` || process.argv[1]?.endsWith("seed.ts")) {
-  if (seedIfEmpty()) console.log("Database seeded (was empty).");
+  if (await seedIfEmpty()) console.log("Database seeded (was empty).");
   else console.log("Database already has data; skip. Delete server/data/ocean-heart.db to reseed.");
 }

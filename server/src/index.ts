@@ -8,12 +8,14 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { appRouter, createContext } from "./trpc/router.js";
 import { seedIfEmpty } from "./db/seed.js";
+import { dbReady } from "./db/index.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3001);
 
 // 启动时自动灌入种子数据(库为空时)
-if (seedIfEmpty()) console.log("[ocean-heart] database seeded on boot");
+await dbReady;
+if (await seedIfEmpty()) console.log("[ocean-heart] database seeded on boot");
 
 const app = new Hono();
 
@@ -26,10 +28,10 @@ app.use(
   "/trpc/*",
   trpcServer({
     router: appRouter,
-    createContext: (_opts, c) => {
+    createContext: async (_opts, c) => {
       const headers: Record<string, string> = {};
       c.req.raw.headers.forEach((v, k) => (headers[k] = v));
-      return createContext(headers);
+      return await createContext(headers);
     },
   })
 );

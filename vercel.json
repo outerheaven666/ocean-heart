@@ -1,0 +1,9 @@
+{
+  "installCommand": "npm ci --include=dev && npm --prefix server ci --include=dev && npm --prefix app ci --include=dev",
+  "buildCommand": "npm --prefix app run build",
+  "outputDirectory": "app/dist",
+  "rewrites": [
+    { "source": "/trpc/:path*", "destination": "/api/trpc/:path*" },
+    { "source": "/((?!api|assets|favicon).*)", "destination": "/index.html" }
+  ]
+}

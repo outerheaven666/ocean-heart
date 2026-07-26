@@ -6,7 +6,7 @@ import { desc, eq, sql } from "drizzle-orm";
 import { db, schema } from "../src/db/index.js";
 import { seedIfEmpty } from "../src/db/seed.js";
 
-seedIfEmpty();
+await seedIfEmpty();
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const boards = db
@@ -57,7 +57,7 @@ const comments = db
   .orderBy(schema.comments.createdAt)
   .all();
 
-const speciesRows = db.select().from(schema.species).orderBy(schema.species.category, schema.species.id).all();
+const speciesRows = await db.select().from(schema.species).orderBy(schema.species.category, schema.species.id).all();
 const species = speciesRows.map((sp) => {
   const first = sp.commonNameZh.split("(")[0];
   const relatedPosts = posts
@@ -67,9 +67,9 @@ const species = speciesRows.map((sp) => {
   return { ...sp, detail: JSON.parse(sp.detail || "{}"), relatedPosts };
 });
 
-const waterParams = db.select().from(schema.waterParams).all();
-const equipment = db.select().from(schema.equipment).all();
-const merchants = db.select().from(schema.merchants).where(eq(schema.merchants.status, "approved")).all();
+const waterParams = await db.select().from(schema.waterParams).all();
+const equipment = await db.select().from(schema.equipment).all();
+const merchants = await db.select().from(schema.merchants).where(eq(schema.merchants.status, "approved")).all();
 
 const out = { boards, posts, comments, species, waterParams, equipment, merchants };
 const target = path.resolve(__dirname, "..", "..", "app", "src", "lib", "fallback.json");
