@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            server/package-lock.json
+            app/package-lock.json
+
+      - name: 安装后端依赖
+        run: npm --prefix server ci
+
+      - name: 后端类型检查 + 冒烟测试(19 项)
+        run: |
+          cd server
+          npx tsc --noEmit
+          npx tsx test/smoke.ts
+
+      - name: 安装前端依赖并构建
+        run: |
+          npm --prefix app ci
+          npm --prefix app run build

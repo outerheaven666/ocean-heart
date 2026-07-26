@@ -1,0 +1,128 @@
+import { useEffect, useState } from "react";
+import { Link, useParams } from "react-router";
+import { ThumbsUp, Star, Eye, Award } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useAuth } from "@/lib/auth";
+import { fmtTime } from "@/lib/format";
+
+type Post = {
+  id: number; title: string; content: string; views: number; isEssence: number; createdAt: number;
+  boardSlug: string; boardName: string; author: string; authorRole: string; likeCount: number;
+  liked: boolean; favorited: boolean;
+};
+type Comment = { id: number; content: string; createdAt: number; author: string; authorRole: string };
+
+export default function PostDetail() {
+  const { id } = useParams();
+  const postId = Number(id);
+  const { me } = useAuth();
+  const [post, setPost] = useState<Post | null>(null);
+  const [comments, setComments] = useState<Comment[]>([]);
+  const [draft, setDraft] = useState("");
+  const [error, setError] = useState("");
+
+  const load = () => {
+    trpc.posts.byId.query({ id: postId }).then((p) => setPost(p as Post));
+    trpc.comments.list.query({ postId }).then((c) => setComments(c as Comment[]));
+  };
+  useEffect(load, [postId]);
+
+  if (!post) return <p className="text-slate-400 py-10 text-center">加载中…</p>;
+
+  const toggleLike = async () => {
+    if (!me) return setError("请先登录");
+    await trpc.posts.toggleLike.mutate({ postId });
+    const p = await trpc.posts.byId.query({ id: postId });
+    setPost(p as Post);
+  };
+  const toggleFav = async () => {
+    if (!me) return setError("请先登录");
+    await trpc.posts.toggleFavorite.mutate({ postId });
+    const p = await trpc.posts.byId.query({ id: postId });
+    setPost(p as Post);
+  };
+  const submitComment = async () => {
+    setError("");
+    if (!me) return setError("请先登录后再回帖");
+    try {
+      await trpc.comments.create.mutate({ postId, content: draft });
+      setDraft("");
+      load();
+    } catch (e: any) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <div className="space-y-4 max-w-3xl mx-auto">
+      <article className="bg-white rounded-xl border border-sea-100 p-6">
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-2">
+          {post.isEssence === 1 && (
+            <span className="flex items-center gap-0.5 text-sand-500 font-medium"><Award className="w-3.5 h-3.5" /> 精华</span>
+          )}
+          <Link to={`/board/${post.boardSlug}`} className="bg-sea-100 text-sea-700 px-2 py-0.5 rounded hover:bg-sea-200">
+            {post.boardName}
+          </Link>
+          <span className={post.authorRole === "admin" ? "text-sea-600 font-medium" : ""}>{post.author}</span>
+          <span>{fmtTime(post.createdAt)}</span>
+          <span className="flex items-center gap-1 ml-auto"><Eye className="w-3.5 h-3.5" />{post.views}</span>
+        </div>
+        <h1 className="text-xl font-bold text-sea-900 mb-4">{post.title}</h1>
+        <div className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">{post.content}</div>
+        <div className="flex gap-3 mt-6 pt-4 border-t border-sea-100">
+          <button
+            onClick={toggleLike}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition ${post.liked ? "bg-sea-700 text-white border-sea-700" : "border-sea-200 text-sea-700 hover:bg-sea-50"}`}
+          >
+            <ThumbsUp className="w-4 h-4" /> {post.likeCount}
+          </button>
+          <button
+            onClick={toggleFav}
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition ${post.favorited ? "bg-sand-400 text-sea-950 border-sand-400" : "border-sea-200 text-sea-700 hover:bg-sea-50"}`}
+          >
+            <Star className="w-4 h-4" /> {post.favorited ? "已收藏" : "收藏"}
+          </button>
+        </div>
+      </article>
+
+      <section className="bg-white rounded-xl border border-sea-100 p-6">
+        <h2 className="font-bold text-sea-900 mb-4">全部回帖 ({comments.length})</h2>
+        <div className="space-y-4">
+          {comments.map((c, i) => (
+            <div key={c.id} className="border-b border-sea-50 last:border-0 pb-3">
+              <div className="text-xs text-slate-500 mb-1">
+                <span className={c.authorRole === "admin" ? "text-sea-600 font-medium" : "text-slate-700"}>{c.author}</span>
+                {" · "}{fmtTime(c.createdAt)} · {i + 1} 楼
+              </div>
+              <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.content}</p>
+            </div>
+          ))}
+          {comments.length === 0 && <p className="text-sm text-slate-400">还没有回帖,来抢沙发。</p>}
+        </div>
+        <div className="mt-5">
+          {me && !me.realName && (
+            <p className="text-xs text-sand-500 mb-2">
+              按社区合规要求,回帖需要先在<Link to="/profile" className="underline">个人中心</Link>完成实名登记(后台实名,前台不展示)。
+            </p>
+          )}
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={3}
+            placeholder={me ? "写下你的回复…" : "登录后才能回帖"}
+            disabled={!me}
+            className="w-full border border-sea-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400 disabled:bg-slate-50"
+          />
+          {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
+          <button
+            onClick={submitComment}
+            disabled={!me || draft.trim().length === 0}
+            className="mt-2 bg-sea-700 hover:bg-sea-600 disabled:bg-slate-300 text-white text-sm px-5 py-2 rounded-lg transition"
+          >
+            发表回复
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}

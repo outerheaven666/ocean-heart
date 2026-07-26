@@ -1,0 +1,13 @@
+{
+  "name": "ocean-heart",
+  "version": "1.0.0",
+  "private": true,
+  "description": "海洋之心 —— 海水观赏玩家社区(论坛 + 生物资料库 + 水质速查 + 设备库 + 合规商家)",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm --prefix app run build",
+    "start": "npm --prefix server run start",
+    "seed": "npm --prefix server run seed",
+    "test": "npm --prefix server run smoke"
+  }
+}
