@@ -156,8 +156,10 @@ app.notFound((c) =>
 );
 
 // 自实现的 Node→Web 适配:完整缓冲请求体后再交给 hono。
-// 原因:@hono/node-server/vercel 在 Vercel 上处理 POST 请求体时会挂起(GET 正常),
-// 缓冲式转换简单可控,本站请求/响应都是小 JSON,无流式需求。
+// 原因:@hono/node-server/vercel 在 Vercel 上处理 POST 请求体时会挂起(GET 正常)。
+// 注意:@vercel/node 默认启用 body parser,会提前消费请求流并把结果挂在
+// req.body(已解析) / req.rawBody(Buffer) 上 —— 必须优先从这两个属性取,
+// 否则 for await 读到的只是被掏空后的空流,POST 永远拿不到 body。
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
   try {
     // 诊断端点不等待 init,避免初始化卡住时连状态都看不了
@@ -165,9 +167,20 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
       await init;
     }
     const method = req.method || "GET";
-    const chunks: Buffer[] = [];
+    let body: Buffer | undefined;
     if (method !== "GET" && method !== "HEAD") {
-      for await (const chunk of req) chunks.push(chunk as Buffer);
+      const vreq = req as IncomingMessage & { rawBody?: unknown; body?: unknown };
+      if (Buffer.isBuffer(vreq.rawBody)) {
+        body = vreq.rawBody;
+      } else if (vreq.body !== undefined && vreq.body !== null) {
+        body = Buffer.from(
+          typeof vreq.body === "string" ? vreq.body : JSON.stringify(vreq.body)
+        );
+      } else {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        if (chunks.length) body = Buffer.concat(chunks);
+      }
     }
     const headers = new Headers();
     const raw = req.rawHeaders;
@@ -175,7 +188,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
     const webReq = new Request(`https://${req.headers.host || "localhost"}${req.url || "/"}`, {
       method,
       headers,
-      body: chunks.length ? Buffer.concat(chunks) : undefined,
+      body,
     });
     const webRes = await app.fetch(webReq);
     const resHeaders: Record<string, string> = {};
