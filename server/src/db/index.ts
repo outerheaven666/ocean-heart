@@ -23,6 +23,14 @@ export const client = resolvedUrl.startsWith("file:")
   ? createNodeClient({ url: resolvedUrl })
   : createWebClient({ url: resolvedUrl, authToken: process.env.TURSO_AUTH_TOKEN });
 
+// 模块加载时的环境快照(诊断 serverless 环境变量时机问题用)
+export const dbDebug = {
+  urlHead: resolvedUrl.slice(0, 50),
+  isFile: resolvedUrl.startsWith("file:"),
+  tokenLenAtLoad: (process.env.TURSO_AUTH_TOKEN || "").length,
+  clientProtocol: (client as unknown as { protocol?: string }).protocol || "unknown",
+};
+
 // 轻量 DDL 迁移(CREATE TABLE IF NOT EXISTS),与 drizzle schema 保持一致
 const DDL = `
 CREATE TABLE IF NOT EXISTS users (
