@@ -1,10 +1,8 @@
 // Vercel Serverless 入口:挂载 tRPC API(路径 /api/trpc/*,经 vercel.json rewrite 承接 /trpc/*)
-// 注意:必须使用 @hono/node-server/vercel 的 Node 风格 (req, res) 适配器;
-// hono/vercel 的 Web Request 签名只适用于 Edge 运行时,在 Node 运行时下会挂起。
+// 注意:必须用 Node 风格 (req, res) 签名;Web Request 签名在 @vercel/node 下会挂起。
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { trpcServer } from "@hono/trpc-server";
-import { handle } from "@hono/node-server/vercel";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
@@ -157,12 +155,38 @@ app.notFound((c) =>
   c.json({ notFound: true, honoPath: c.req.path, honoUrl: c.req.url, initStage, initError }, 404)
 );
 
-const honoHandler = handle(app);
-
+// 自实现的 Node→Web 适配:完整缓冲请求体后再交给 hono。
+// 原因:@hono/node-server/vercel 在 Vercel 上处理 POST 请求体时会挂起(GET 正常),
+// 缓冲式转换简单可控,本站请求/响应都是小 JSON,无流式需求。
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  // 诊断端点不等待 init,避免初始化卡住时连状态都看不了
-  if (!(req.url || "").endsWith("/trpc/_diag")) {
-    await init;
+  try {
+    // 诊断端点不等待 init,避免初始化卡住时连状态都看不了
+    if (!(req.url || "").endsWith("/trpc/_diag")) {
+      await init;
+    }
+    const method = req.method || "GET";
+    const chunks: Buffer[] = [];
+    if (method !== "GET" && method !== "HEAD") {
+      for await (const chunk of req) chunks.push(chunk as Buffer);
+    }
+    const headers = new Headers();
+    const raw = req.rawHeaders;
+    for (let i = 0; i + 1 < raw.length; i += 2) headers.append(raw[i], raw[i + 1]);
+    const webReq = new Request(`https://${req.headers.host || "localhost"}${req.url || "/"}`, {
+      method,
+      headers,
+      body: chunks.length ? Buffer.concat(chunks) : undefined,
+    });
+    const webRes = await app.fetch(webReq);
+    const resHeaders: Record<string, string> = {};
+    webRes.headers.forEach((v, k) => {
+      resHeaders[k] = v;
+    });
+    res.writeHead(webRes.status, resHeaders);
+    res.end(Buffer.from(await webRes.arrayBuffer()));
+  } catch (e) {
+    console.error("[ocean-heart] handler error:", e);
+    if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" });
+    res.end(JSON.stringify({ error: String((e as Error)?.message || e) }));
   }
-  return honoHandler(req, res);
 }
