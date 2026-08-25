@@ -1,0 +1,35 @@
+name: verify-deploy
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: "部署地址(不带尾斜杠)"
+        required: true
+        type: string
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: health
+        run: |
+          echo "--- GET /api/health ---"
+          curl -sS -m 30 -w "\nHTTP %{http_code}\n" "${{ inputs.base_url }}/api/health"
+
+      - name: boards.list
+        run: |
+          echo "--- GET /trpc/boards.list ---"
+          curl -sS -m 30 -w "\nHTTP %{http_code}\n" "${{ inputs.base_url }}/trpc/boards.list?input=%7B%22json%22%3Anull%7D" | head -c 2000
+
+      - name: auth.login
+        run: |
+          echo "--- POST /trpc/auth.login ---"
+          curl -sS -m 30 -w "\nHTTP %{http_code}\n" \
+            -X POST "${{ inputs.base_url }}/trpc/auth.login" \
+            -H "Content-Type: application/json" \
+            -d '{"json":{"username":"admin","password":"admin123"}}' | head -c 2000
+
+      - name: index.html
+        run: |
+          echo "--- GET / ---"
+          curl -sS -m 30 -w "\nHTTP %{http_code}\n" "${{ inputs.base_url }}/" | head -c 800
