@@ -52,6 +52,11 @@ app.use(
 
 app.get("/health", (c) => c.json({ ok: true, service: "ocean-heart", mode: "vercel-serverless", time: Date.now() }));
 
+// 调试:未匹配路由时回显 hono 实际看到的路径
+app.notFound((c) =>
+  c.json({ notFound: true, honoPath: c.req.path, honoUrl: c.req.url, initStage, initError }, 404)
+);
+
 const honoHandler = handle(app);
 
 export default async function handler(req: IncomingMessage, res: ServerResponse) {
