@@ -36,7 +36,7 @@ export const client: ClientLike = singleton
   ? singleton
   : (new Proxy({} as ClientLike, {
       get(_target, prop: keyof ClientLike) {
-        const fresh = makeClient() as Record<string | symbol, unknown>;
+        const fresh = makeClient() as unknown as Record<string | symbol, unknown>;
         const value = fresh[prop];
         return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(fresh) : value;
       },
