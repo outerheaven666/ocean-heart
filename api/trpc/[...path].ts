@@ -44,10 +44,27 @@ app.get("/trpc/_diag", async (c) => {
       stack: String(err?.stack || "").slice(0, 600),
     };
   }
+  // 原生 fetch 直连 Turso,绕过 libsql 客户端,看服务端原始响应
+  let rawTest: Record<string, unknown> = null as unknown as Record<string, unknown>;
+  try {
+    const host = (process.env.TURSO_DATABASE_URL || "").replace(/^libsql:\/\//, "");
+    const resp = await fetch(`https://${host}/v2/pipeline`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.TURSO_AUTH_TOKEN || ""}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ requests: [{ type: "execute", stmt: { sql: "SELECT 1" } }, { type: "close" }] }),
+    });
+    rawTest = { status: resp.status, body: (await resp.text()).slice(0, 300) };
+  } catch (e) {
+    rawTest = { exception: String(e) };
+  }
   return c.json({
     initStage,
     initError,
     dbTest,
+    rawTest,
     env: {
       tursoUrl: !!process.env.TURSO_DATABASE_URL,
       urlHost: (process.env.TURSO_DATABASE_URL || "").replace(/^libsql:\/\//, "").slice(0, 70),
