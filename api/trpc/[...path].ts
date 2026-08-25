@@ -60,6 +60,21 @@ app.get("/trpc/_diag", async (c) => {
       code: err?.code,
       cause: String((err?.cause as { message?: string })?.message || err?.cause || ""),
     };
+  }
+
+  // 新建客户端(在 fetch 拦截安装之后),对比模块级客户端
+  let freshTest: Record<string, unknown> = null as unknown as Record<string, unknown>;
+  try {
+    const { createClient } = await import("@libsql/client/web");
+    const fresh = createClient({
+      url: process.env.TURSO_DATABASE_URL || "",
+      authToken: process.env.TURSO_AUTH_TOKEN || "",
+    });
+    const rs = await fresh.execute("SELECT 1 AS one");
+    freshTest = { ok: true, value: rs.rows[0]?.one };
+  } catch (e) {
+    const err = e as { message?: string; code?: string };
+    freshTest = { ok: false, message: String(err?.message), code: err?.code };
   } finally {
     globalThis.fetch = origFetch;
   }
@@ -86,6 +101,7 @@ app.get("/trpc/_diag", async (c) => {
     initStage,
     initError,
     dbTest,
+    freshTest,
     rawTest,
     capturedRequests: captured,
     env: {
