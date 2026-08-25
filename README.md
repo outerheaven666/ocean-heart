@@ -6,11 +6,12 @@
 
 ## 线上地址
 
+- **生产环境(国内可直接访问,全功能:登录/发帖/真实数据库)**:https://oceanheart666.dpdns.org
 - **代码仓库**:https://github.com/outerheaven666/ocean-heart
-- **静态预览**(GitHub Pages,仅前端界面,数据接口需后端服务):https://outerheaven666.github.io/ocean-heart/
+- **静态预览**(GitHub Pages,仅前端界面):https://outerheaven666.github.io/ocean-heart/
 - **CI**:每次 push 自动运行后端 19 项冒烟测试 + 前端构建(`.github/workflows/ci.yml`)
 
-> 完整功能(登录/发帖/资料库数据)需要运行后端服务。生产部署:`npm run build && npm start`(单端口 3001,后端托管前端产物),数据库默认 SQLite,可平滑切换 MySQL。
+> 生产架构:前端静态资源 + 后端 Hono/tRPC Serverless 函数均托管于 **Vercel**,数据库为 **Turso**(libSQL,已灌入 38 物种 / 9 板块 / 44 项水质参数种子数据)。免费自定义域名 `oceanheart666.dpdns.org` 由 DigitalPlat 提供(有效期至 2027-08,可免费续期)。本地生产模式:`npm run build && npm start`(单端口 3001),数据库默认 SQLite,可平滑切换 MySQL/Turso。
 
 ## 技术栈
 
