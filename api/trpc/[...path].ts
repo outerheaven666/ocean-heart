@@ -23,7 +23,9 @@ const init: Promise<unknown> = (async () => {
   console.error("[ocean-heart] init failed:", err);
 });
 
-const app = new Hono().basePath("/api");
+// 注意:Vercel 调用函数时传入的是原始路径(/trpc/*,不含 /api 前缀),
+// 且 rewrite 已把 /trpc/* 映射到本函数,因此路由直接按 /trpc/* 声明,不要 basePath("/api")。
+const app = new Hono();
 
 // 诊断端点:不等待 init,随时可看初始化进行到哪一步
 app.get("/trpc/_diag", (c) =>
@@ -41,7 +43,7 @@ app.use(
   "/trpc/*",
   trpcServer({
     router: appRouter,
-    endpoint: "/api/trpc",
+    endpoint: "/trpc",
     createContext: async (_opts, c) => {
       const headers: Record<string, string> = {};
       c.req.raw.headers.forEach((v, k) => (headers[k] = v));
@@ -49,8 +51,6 @@ app.use(
     },
   })
 );
-
-app.get("/health", (c) => c.json({ ok: true, service: "ocean-heart", mode: "vercel-serverless", time: Date.now() }));
 
 // 调试:未匹配路由时回显 hono 实际看到的路径
 app.notFound((c) =>
