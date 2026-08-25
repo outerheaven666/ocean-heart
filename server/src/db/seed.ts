@@ -9,7 +9,7 @@ export async function seedIfEmpty() {
   await dbReady;
   const hasSpecies = (await db.select().from(schema.species).limit(1).all()).length > 0;
   if (hasSpecies) return false;
-  seed();
+  await seed();
   return true;
 }
 
