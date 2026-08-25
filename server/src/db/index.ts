@@ -1,10 +1,10 @@
 import { createClient as createNodeClient } from "@libsql/client";
-import { createClient as createWebClient } from "@libsql/client/web";
 import { drizzle } from "drizzle-orm/libsql";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import * as schema from "./schema.js";
+import { RawTursoClient } from "./turso-raw.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -19,34 +19,21 @@ function resolveUrl() {
 const resolvedUrl = resolveUrl();
 const isLocal = resolvedUrl.startsWith("file:");
 
-function makeClient() {
-  // 远程(libsql:// / https://)走纯 fetch 的 web 客户端 —— serverless 免原生依赖;
-  // 本地 file: 走 Node 客户端。两者实现同一 Client 接口,drizzle 无差别使用。
-  return isLocal
-    ? createNodeClient({ url: resolvedUrl })
-    : createWebClient({ url: resolvedUrl, authToken: process.env.TURSO_AUTH_TOKEN });
-}
-
-// 远程模式:hrana HTTP 客户端在 serverless 上跨请求/并发复用会出现状态污染(Turso 返回 401),
-// 因此每次方法调用创建全新客户端(纯 HTTP 无连接状态,开销可忽略);
-// 本地 file: 模式无此问题,保持单例。
-type ClientLike = ReturnType<typeof makeClient>;
-const singleton = isLocal ? makeClient() : null;
-export const client: ClientLike = singleton
-  ? singleton
-  : (new Proxy({} as ClientLike, {
-      get(_target, prop: keyof ClientLike) {
-        const fresh = makeClient() as unknown as Record<string | symbol, unknown>;
-        const value = fresh[prop];
-        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(fresh) : value;
-      },
-    }) as ClientLike);
+// 本地 file: 用 @libsql/client Node 客户端;
+// 远程:用自研 RawTursoClient(纯 fetch 直连 /v2/pipeline)——
+// @libsql/client 的 hrana 客户端在 Vercel serverless 上会出现 401 状态污染,弃用。
+export const client = isLocal
+  ? createNodeClient({ url: resolvedUrl })
+  : (new RawTursoClient(resolvedUrl, process.env.TURSO_AUTH_TOKEN || "") as unknown as ReturnType<
+      typeof createNodeClient
+    >);
 
 // 模块加载时的环境快照(诊断 serverless 环境变量时机问题用)
 export const dbDebug = {
   urlHead: resolvedUrl.slice(0, 50),
   isFile: isLocal,
   tokenLenAtLoad: (process.env.TURSO_AUTH_TOKEN || "").length,
+  driver: isLocal ? "libsql-node" : "raw-turso",
 };
 
 // 轻量 DDL 迁移(CREATE TABLE IF NOT EXISTS),与 drizzle schema 保持一致
