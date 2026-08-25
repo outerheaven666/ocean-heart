@@ -17,18 +17,36 @@ function resolveUrl() {
 }
 
 const resolvedUrl = resolveUrl();
-// 远程(libsql:// / https://)走纯 fetch 的 web 客户端 —— serverless 免原生依赖;
-// 本地 file: 走 Node 客户端。两者实现同一 Client 接口,drizzle 无差别使用。
-export const client = resolvedUrl.startsWith("file:")
-  ? createNodeClient({ url: resolvedUrl })
-  : createWebClient({ url: resolvedUrl, authToken: process.env.TURSO_AUTH_TOKEN });
+const isLocal = resolvedUrl.startsWith("file:");
+
+function makeClient() {
+  // 远程(libsql:// / https://)走纯 fetch 的 web 客户端 —— serverless 免原生依赖;
+  // 本地 file: 走 Node 客户端。两者实现同一 Client 接口,drizzle 无差别使用。
+  return isLocal
+    ? createNodeClient({ url: resolvedUrl })
+    : createWebClient({ url: resolvedUrl, authToken: process.env.TURSO_AUTH_TOKEN });
+}
+
+// 远程模式:hrana HTTP 客户端在 serverless 上跨请求/并发复用会出现状态污染(Turso 返回 401),
+// 因此每次方法调用创建全新客户端(纯 HTTP 无连接状态,开销可忽略);
+// 本地 file: 模式无此问题,保持单例。
+type ClientLike = ReturnType<typeof makeClient>;
+const singleton = isLocal ? makeClient() : null;
+export const client: ClientLike = singleton
+  ? singleton
+  : (new Proxy({} as ClientLike, {
+      get(_target, prop: keyof ClientLike) {
+        const fresh = makeClient() as Record<string | symbol, unknown>;
+        const value = fresh[prop];
+        return typeof value === "function" ? (value as (...args: unknown[]) => unknown).bind(fresh) : value;
+      },
+    }) as ClientLike);
 
 // 模块加载时的环境快照(诊断 serverless 环境变量时机问题用)
 export const dbDebug = {
   urlHead: resolvedUrl.slice(0, 50),
-  isFile: resolvedUrl.startsWith("file:"),
+  isFile: isLocal,
   tokenLenAtLoad: (process.env.TURSO_AUTH_TOKEN || "").length,
-  clientProtocol: (client as unknown as { protocol?: string }).protocol || "unknown",
 };
 
 // 轻量 DDL 迁移(CREATE TABLE IF NOT EXISTS),与 drizzle schema 保持一致
