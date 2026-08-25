@@ -1,8 +1,11 @@
 // Vercel Serverless 入口:挂载 tRPC API(路径 /api/trpc/*,经 vercel.json rewrite 承接 /trpc/*)
+// 注意:必须使用 @hono/node-server/vercel 的 Node 风格 (req, res) 适配器;
+// hono/vercel 的 Web Request 签名只适用于 Edge 运行时,在 Node 运行时下会挂起。
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { trpcServer } from "@hono/trpc-server";
-import { handle } from "hono/vercel";
+import { handle } from "@hono/node-server/vercel";
+import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
 
@@ -51,13 +54,10 @@ app.get("/health", (c) => c.json({ ok: true, service: "ocean-heart", mode: "verc
 
 const honoHandler = handle(app);
 
-export const runtime = "nodejs";
-export const maxDuration = 30;
-
-export default async function handler(req: Request) {
+export default async function handler(req: IncomingMessage, res: ServerResponse) {
   // 诊断端点不等待 init,避免初始化卡住时连状态都看不了
-  if (!new URL(req.url).pathname.endsWith("/trpc/_diag")) {
+  if (!(req.url || "").endsWith("/trpc/_diag")) {
     await init;
   }
-  return honoHandler(req);
+  return honoHandler(req, res);
 }
