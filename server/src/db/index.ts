@@ -136,14 +136,21 @@ CREATE TABLE IF NOT EXISTS forum_links (
 );
 `;
 
-// 数据库初始化(建表)。任何查询发生前必须 await dbReady
-export const dbReady: Promise<void> = client
-  .executeMultiple(DDL)
-  .then(() => {})
-  .catch((err) => {
-    console.error("[ocean-heart] database init failed:", err);
-    throw err;
-  });
+// 数据库初始化(建表)。任何查询发生前必须 await dbReady。
+// 先做一次轻量探测:表已存在则跳过全量 DDL(Turso 上 sequence 建表较慢,约几十秒),
+// 只有空库/缺表时才执行 DDL。CREATE TABLE IF NOT EXISTS 本身幂等,并发执行安全。
+export const dbReady: Promise<void> = (async () => {
+  try {
+    await client.execute("SELECT 1 FROM users LIMIT 1");
+  } catch {
+    try {
+      await client.executeMultiple(DDL);
+    } catch (err) {
+      console.error("[ocean-heart] database init failed:", err);
+      throw err;
+    }
+  }
+})();
 
 export const db = drizzle(client, { schema });
 export { schema };
