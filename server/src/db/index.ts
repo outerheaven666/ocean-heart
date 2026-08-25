@@ -1,4 +1,3 @@
-import { createClient as createNodeClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -19,14 +18,14 @@ function resolveUrl() {
 const resolvedUrl = resolveUrl();
 const isLocal = resolvedUrl.startsWith("file:");
 
-// 本地 file: 用 @libsql/client Node 客户端;
+// 本地 file: 用 @libsql/client Node 客户端(动态导入,避免原生 libsql 驱动被打进 serverless 包,
+// 显著减小 Vercel 函数体积、加快冷启动);
 // 远程:用自研 RawTursoClient(纯 fetch 直连 /v2/pipeline)——
 // @libsql/client 的 hrana 客户端在 Vercel serverless 上会出现 401 状态污染,弃用。
-export const client = isLocal
-  ? createNodeClient({ url: resolvedUrl })
-  : (new RawTursoClient(resolvedUrl, process.env.TURSO_AUTH_TOKEN || "") as unknown as ReturnType<
-      typeof createNodeClient
-    >);
+type NodeClient = import("@libsql/client").Client;
+export const client: NodeClient = isLocal
+  ? ((await import("@libsql/client")).createClient({ url: resolvedUrl }) as NodeClient)
+  : (new RawTursoClient(resolvedUrl, process.env.TURSO_AUTH_TOKEN || "") as unknown as NodeClient);
 
 // 模块加载时的环境快照(诊断 serverless 环境变量时机问题用)
 export const dbDebug = {
