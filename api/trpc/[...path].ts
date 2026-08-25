@@ -8,7 +8,7 @@ import { handle } from "@hono/node-server/vercel";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
-import { db, schema, dbDebug } from "../../server/src/db/index.js";
+import { db, schema, dbDebug, client } from "../../server/src/db/index.js";
 
 // 冷启动初始化:建表 + 空库灌种子(只执行一次),带阶段状态便于诊断
 let initStage = "created";
@@ -58,8 +58,29 @@ app.get("/trpc/_diag", async (c) => {
       ok: false,
       message: String(err?.message),
       code: err?.code,
-      cause: String((err?.cause as { message?: string })?.message || err?.cause || ""),
+      stack: String(err?.stack || "").slice(0, 500),
     };
+  }
+
+  // 经模块级 client(代理)直接执行,绕过 drizzle
+  let viaProxySimple: Record<string, unknown> = null as unknown as Record<string, unknown>;
+  try {
+    const rs = await client.execute("SELECT 1 AS one");
+    viaProxySimple = { ok: true, value: rs.rows[0]?.one };
+  } catch (e) {
+    viaProxySimple = { ok: false, message: String((e as Error)?.message) };
+  }
+
+  // 经模块级 client(代理)执行与 drizzle 相同的 boards 查询
+  let viaProxyBoards: Record<string, unknown> = null as unknown as Record<string, unknown>;
+  try {
+    const rs = await client.execute({
+      sql: 'SELECT "id", "slug", "name", "description", "sort" FROM "boards" LIMIT ?',
+      args: [1],
+    });
+    viaProxyBoards = { ok: true, rows: rs.rows.length };
+  } catch (e) {
+    viaProxyBoards = { ok: false, message: String((e as Error)?.message) };
   }
 
   // 新建客户端(在 fetch 拦截安装之后),对比模块级客户端
@@ -102,6 +123,8 @@ app.get("/trpc/_diag", async (c) => {
     initError,
     dbDebug,
     dbTest,
+    viaProxySimple,
+    viaProxyBoards,
     freshTest,
     rawTest,
     capturedRequests: captured,
