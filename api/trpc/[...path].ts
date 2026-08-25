@@ -8,6 +8,7 @@ import { handle } from "@hono/node-server/vercel";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
+import { db, schema } from "../../server/src/db/index.js";
 
 // 冷启动初始化:建表 + 空库灌种子(只执行一次),带阶段状态便于诊断
 let initStage = "created";
@@ -27,15 +28,34 @@ const init: Promise<unknown> = (async () => {
 // 且 rewrite 已把 /trpc/* 映射到本函数,因此路由直接按 /trpc/* 声明,不要 basePath("/api")。
 const app = new Hono();
 
-// 诊断端点:不等待 init,随时可看初始化进行到哪一步
-app.get("/trpc/_diag", (c) =>
-  c.json({
+// 诊断端点:不等待 init,随时可看初始化状态 + 实测一次数据库查询
+app.get("/trpc/_diag", async (c) => {
+  let dbTest: Record<string, unknown> = null as unknown as Record<string, unknown>;
+  try {
+    const rows = await db.select().from(schema.boards).limit(1).all();
+    dbTest = { ok: true, sampleRows: rows.length };
+  } catch (e) {
+    const err = e as { message?: string; code?: string; stack?: string; cause?: unknown };
+    dbTest = {
+      ok: false,
+      message: String(err?.message),
+      code: err?.code,
+      cause: String((err?.cause as { message?: string })?.message || err?.cause || ""),
+      stack: String(err?.stack || "").slice(0, 600),
+    };
+  }
+  return c.json({
     initStage,
     initError,
-    env: { tursoUrl: !!process.env.TURSO_DATABASE_URL, tursoToken: !!process.env.TURSO_AUTH_TOKEN },
+    dbTest,
+    env: {
+      tursoUrl: !!process.env.TURSO_DATABASE_URL,
+      urlHost: (process.env.TURSO_DATABASE_URL || "").replace(/^libsql:\/\//, "").slice(0, 70),
+      tokenLen: (process.env.TURSO_AUTH_TOKEN || "").length,
+    },
     time: Date.now(),
-  })
-);
+  });
+});
 
 app.use("/trpc/*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization"] }));
 
