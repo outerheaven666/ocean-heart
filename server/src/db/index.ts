@@ -1,4 +1,5 @@
-import { createClient } from "@libsql/client";
+import { createClient as createNodeClient } from "@libsql/client";
+import { createClient as createWebClient } from "@libsql/client/web";
 import { drizzle } from "drizzle-orm/libsql";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
@@ -15,10 +16,12 @@ function resolveUrl() {
   return "file:" + path.join(dataDir, "ocean-heart.db").replace(/\\/g, "/");
 }
 
-export const client = createClient({
-  url: resolveUrl(),
-  authToken: process.env.TURSO_AUTH_TOKEN,
-});
+const resolvedUrl = resolveUrl();
+// 远程(libsql:// / https://)走纯 fetch 的 web 客户端 —— serverless 免原生依赖;
+// 本地 file: 走 Node 客户端。两者实现同一 Client 接口,drizzle 无差别使用。
+export const client = resolvedUrl.startsWith("file:")
+  ? createNodeClient({ url: resolvedUrl })
+  : createWebClient({ url: resolvedUrl, authToken: process.env.TURSO_AUTH_TOKEN });
 
 // 轻量 DDL 迁移(CREATE TABLE IF NOT EXISTS),与 drizzle schema 保持一致
 const DDL = `
