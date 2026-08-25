@@ -12,6 +12,7 @@
     "test": "npm --prefix server run smoke"
   },
   "dependencies": {
+    "@hono/node-server": "^1.13.7",
     "@hono/trpc-server": "^0.3.4",
     "@libsql/client": "^0.14.0",
     "@trpc/server": "^11.0.0",
