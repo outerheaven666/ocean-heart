@@ -30,6 +30,24 @@ const app = new Hono();
 
 // 诊断端点:不等待 init,随时可看初始化状态 + 实测一次数据库查询
 app.get("/trpc/_diag", async (c) => {
+  // 拦截 libsql 客户端发出的真实请求(脱敏),与 env 对比
+  const captured: Array<Record<string, unknown>> = [];
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    try {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.href : (input as Request).url;
+      const rawHeaders = typeof input === "object" && "headers" in (input as object) ? (input as Request).headers : init?.headers;
+      const hdrs: Record<string, string> = {};
+      new Headers(rawHeaders as HeadersInit).forEach((v, k) => {
+        hdrs[k] = k === "authorization" ? `${v.slice(0, 18)}...${v.slice(-8)} (len=${v.length})` : v;
+      });
+      captured.push({ url, headers: hdrs });
+    } catch {
+      /* ignore */
+    }
+    return origFetch(input as RequestInfo, init);
+  }) as typeof fetch;
+
   let dbTest: Record<string, unknown> = null as unknown as Record<string, unknown>;
   try {
     const rows = await db.select().from(schema.boards).limit(1).all();
@@ -41,9 +59,11 @@ app.get("/trpc/_diag", async (c) => {
       message: String(err?.message),
       code: err?.code,
       cause: String((err?.cause as { message?: string })?.message || err?.cause || ""),
-      stack: String(err?.stack || "").slice(0, 600),
     };
+  } finally {
+    globalThis.fetch = origFetch;
   }
+
   // 原生 fetch 直连 Turso,绕过 libsql 客户端,看服务端原始响应
   let rawTest: Record<string, unknown> = null as unknown as Record<string, unknown>;
   try {
@@ -56,19 +76,22 @@ app.get("/trpc/_diag", async (c) => {
       },
       body: JSON.stringify({ requests: [{ type: "execute", stmt: { sql: "SELECT 1" } }, { type: "close" }] }),
     });
-    rawTest = { status: resp.status, body: (await resp.text()).slice(0, 300) };
+    rawTest = { status: resp.status, body: (await resp.text()).slice(0, 120) };
   } catch (e) {
     rawTest = { exception: String(e) };
   }
+
+  const envToken = process.env.TURSO_AUTH_TOKEN || "";
   return c.json({
     initStage,
     initError,
     dbTest,
     rawTest,
+    capturedRequests: captured,
     env: {
       tursoUrl: !!process.env.TURSO_DATABASE_URL,
       urlHost: (process.env.TURSO_DATABASE_URL || "").replace(/^libsql:\/\//, "").slice(0, 70),
-      tokenLen: (process.env.TURSO_AUTH_TOKEN || "").length,
+      tokenMask: `Bearer ${envToken.slice(0, 11)}...${envToken.slice(-8)} (len=${("Bearer " + envToken).length})`,
     },
     time: Date.now(),
   });
