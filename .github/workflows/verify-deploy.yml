@@ -28,11 +28,11 @@ jobs:
 
       - name: auth.login
         run: |
-          echo "--- POST /trpc/auth.login ---"
-          curl -sS -m 60 -w "\nHTTP %{http_code}\n" \
-            -X POST "${{ inputs.base_url }}/trpc/auth.login" \
+          echo "--- POST /trpc/auth.login?batch=1 (与前端一致的 batch 格式) ---"
+          curl -sS -m 90 -w "\nHTTP %{http_code}\n" \
+            -X POST "${{ inputs.base_url }}/trpc/auth.login?batch=1" \
             -H "Content-Type: application/json" \
-            -d '{"json":{"username":"admin","password":"admin123"}}' | head -c 2000
+            -d '{"0":{"json":{"username":"admin","password":"admin123"}}}' | head -c 2000
 
       - name: index.html
         run: |
