@@ -8,7 +8,7 @@ import { handle } from "@hono/node-server/vercel";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
-import { db, schema } from "../../server/src/db/index.js";
+import { db, schema, dbDebug } from "../../server/src/db/index.js";
 
 // 冷启动初始化:建表 + 空库灌种子(只执行一次),带阶段状态便于诊断
 let initStage = "created";
@@ -100,6 +100,7 @@ app.get("/trpc/_diag", async (c) => {
   return c.json({
     initStage,
     initError,
+    dbDebug,
     dbTest,
     freshTest,
     rawTest,
