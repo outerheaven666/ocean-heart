@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getWaterParams } from "@/lib/data";
 import { TANK_TYPE_LABEL } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 type Row = { id: number; param: string; unit: string; tankType: string; minVal: string; maxVal: string; target: string; note: string };
 const TYPES = ["reef", "fowlr", "fot", "sps"] as const;
@@ -8,6 +9,7 @@ const TYPES = ["reef", "fowlr", "fot", "sps"] as const;
 export default function Water() {
   const [type, setType] = useState<(typeof TYPES)[number]>("reef");
   const [rows, setRows] = useState<Row[]>([]);
+  useTitle("水质参数速查");
 
   useEffect(() => {
     getWaterParams(type).then((r) => setRows(r as Row[]));
