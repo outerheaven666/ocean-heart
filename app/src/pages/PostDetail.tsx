@@ -6,6 +6,7 @@ import { getPost, getComments, isFallbackMode, friendlyError } from "@/lib/data"
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
 import ImageUploadButton from "@/components/ImageUploadButton";
+import { useTitle } from "@/lib/title";
 
 type Post = {
   id: number; title: string; content: string; views: number; isEssence: number; createdAt: number;
@@ -61,6 +62,8 @@ export default function PostDetail() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState("");
+  const [actBusy, setActBusy] = useState(false);
+  useTitle(post?.title);
 
   const load = () => {
     getPost(postId).then((p) => setPost(p as Post));
@@ -82,18 +85,36 @@ export default function PostDetail() {
   const isAdmin = me?.role === "admin";
 
   const toggleLike = async () => {
+    setError("");
     if (isFallbackMode()) return setError("静态演示模式下无法点赞,需要完整后端服务");
     if (!me) return setError("请先登录");
-    await trpc.posts.toggleLike.mutate({ postId });
-    const p = await getPost(postId);
-    setPost(p as Post);
+    if (actBusy) return; // 防连点:快速双击不再等于白点
+    setActBusy(true);
+    try {
+      await trpc.posts.toggleLike.mutate({ postId });
+      const p = await getPost(postId);
+      setPost(p as Post);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setActBusy(false);
+    }
   };
   const toggleFav = async () => {
+    setError("");
     if (isFallbackMode()) return setError("静态演示模式下无法收藏,需要完整后端服务");
     if (!me) return setError("请先登录");
-    await trpc.posts.toggleFavorite.mutate({ postId });
-    const p = await getPost(postId);
-    setPost(p as Post);
+    if (actBusy) return;
+    setActBusy(true);
+    try {
+      await trpc.posts.toggleFavorite.mutate({ postId });
+      const p = await getPost(postId);
+      setPost(p as Post);
+    } catch (e) {
+      setError(friendlyError(e));
+    } finally {
+      setActBusy(false);
+    }
   };
   const submitComment = async () => {
     setError("");
