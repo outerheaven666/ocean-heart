@@ -115,7 +115,8 @@ CREATE TABLE IF NOT EXISTS equipment (
   brand TEXT NOT NULL,
   model TEXT NOT NULL,
   key_params TEXT NOT NULL DEFAULT '{}',
-  description TEXT NOT NULL DEFAULT ''
+  description TEXT NOT NULL DEFAULT '',
+  image_url TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS merchants (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,6 +168,12 @@ export const dbReady: Promise<void> = (async () => {
       console.error("[ocean-heart] database init failed:", err);
       throw err;
     }
+  }
+  // 列级增量迁移:既有 equipment 表补 image_url(重复列报错直接忽略)
+  try {
+    await client.execute("ALTER TABLE equipment ADD COLUMN image_url TEXT NOT NULL DEFAULT ''");
+  } catch {
+    /* duplicate column:已存在,忽略 */
   }
 })();
 
