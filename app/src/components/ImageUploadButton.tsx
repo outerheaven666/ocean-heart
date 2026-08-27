@@ -2,8 +2,10 @@ import { useRef, useState } from "react";
 import { ImagePlus, Loader2 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 
+type ImageMime = "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+
 // 客户端压缩:超过 1280px 的照片先缩小,转成 JPEG(约省 80% 体积),GIF 原样上传
-async function compressImage(file: File): Promise<{ mime: string; data: string }> {
+async function compressImage(file: File): Promise<{ mime: ImageMime; data: string }> {
   if (file.type === "image/gif") {
     const buf = await file.arrayBuffer();
     if (buf.byteLength > 420_000) throw new Error("GIF 太大了,请压到 400KB 以内再传");
