@@ -9,6 +9,7 @@ type Detail = {
   difficulty: string; temperament: string; maxSizeCm: number | null; minTankL: number | null; diet: string;
   reefSafeCoral: number; reefSafeInvert: number; distribution: string; description: string;
   protectionLevel: string; tradeStatus: string; dataSource: string; aphiaId: number | null;
+  imageUrl: string;
   detail: Record<string, unknown>;
   relatedPosts: { id: number; title: string; createdAt: number }[];
 };
@@ -51,6 +52,10 @@ export default function SpeciesDetail() {
             {sp.commonNameEn && ` · ${sp.commonNameEn}`}
           </p>
         </div>
+
+        {sp.imageUrl && (
+          <img src={sp.imageUrl} alt={sp.commonNameZh} className="w-full max-h-80 object-cover bg-sea-50" />
+        )}
 
         {prohibited && (
           <div className="bg-red-50 border-b border-red-200 px-6 py-3 flex items-start gap-2 text-sm text-red-700">
