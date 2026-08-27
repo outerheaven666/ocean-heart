@@ -28,7 +28,7 @@ def main():
     comments = []
     for p in posts:
         for c in query("comments.list", {"postId": p["id"]}):
-            comments.append(c)
+            comments.append({"postId": p["id"], **c})
     data = {
         "boards": boards,
         "posts": posts,
