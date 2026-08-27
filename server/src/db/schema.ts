@@ -119,6 +119,15 @@ export const merchants = sqliteTable("merchants", {
   createdAt: integer("created_at").notNull(),
 });
 
+// ---------- 用户上传图片(base64 存库,经 /img/:id 取用) ----------
+export const images = sqliteTable("images", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull(),
+  mime: text("mime").notNull(), // image/jpeg | image/png | image/webp | image/gif
+  data: text("data").notNull(), // base64
+  createdAt: integer("created_at").notNull(),
+});
+
 // ---------- 资料卡与论坛帖双向联动 ----------
 export const forumLinks = sqliteTable("forum_links", {
   id: integer("id").primaryKey({ autoIncrement: true }),
