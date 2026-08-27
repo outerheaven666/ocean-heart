@@ -9,6 +9,7 @@ export type Sp = {
   category: string; difficulty: string; temperament: string; maxSizeCm: number | null;
   minTankL: number | null; diet: string; reefSafeCoral: number; reefSafeInvert: number;
   distribution: string; description: string; protectionLevel: string; tradeStatus: string;
+  imageUrl: string;
 };
 
 export function SpeciesCard({ sp }: { sp: Sp }) {
@@ -17,6 +18,14 @@ export function SpeciesCard({ sp }: { sp: Sp }) {
       to={`/species/${sp.id}`}
       className="bg-white rounded-lg border border-sea-100 hover:border-sea-300 hover:shadow-md transition p-4 block"
     >
+      {sp.imageUrl && (
+        <img
+          src={sp.imageUrl}
+          alt={sp.commonNameZh}
+          loading="lazy"
+          className="w-full h-32 object-cover rounded-md mb-2 bg-sea-50"
+        />
+      )}
       <div className="flex items-start justify-between gap-2 mb-1">
         <h3 className="font-semibold text-sea-900 text-sm leading-5">{sp.commonNameZh}</h3>
         {sp.tradeStatus === "prohibited" && (
