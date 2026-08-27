@@ -235,10 +235,10 @@ export const appRouter = t.router({
         .get();
       if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "帖子不存在" });
       const liked = ctx.user
-        ? !!db.select().from(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.id))).get()
+        ? !!(await db.select().from(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.id))).get())
         : false;
       const favorited = ctx.user
-        ? !!db.select().from(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.id))).get()
+        ? !!(await db.select().from(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.id))).get())
         : false;
       return { ...post, liked, favorited };
     }),
