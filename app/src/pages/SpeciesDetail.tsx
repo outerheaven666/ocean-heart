@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { ShieldAlert, CheckCircle2, XCircle } from "lucide-react";
 import { getSpeciesById } from "@/lib/data";
 import { CATEGORY_LABEL, DIFFICULTY_LABEL, TRADE_LABEL, TEMPERAMENT_LABEL, fmtTime } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 type Detail = {
   id: number; scientificName: string; commonNameZh: string; commonNameEn: string; category: string;
@@ -26,6 +27,7 @@ const DETAIL_LABEL: Record<string, string> = {
 export default function SpeciesDetail() {
   const { id } = useParams();
   const [sp, setSp] = useState<Detail | null>(null);
+  useTitle(sp?.commonNameZh);
 
   useEffect(() => {
     getSpeciesById(Number(id)).then((r) => setSp(r as unknown as Detail));
