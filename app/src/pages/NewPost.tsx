@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { getBoards, friendlyError } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
+import { useTitle } from "@/lib/title";
 import ImageUploadButton from "@/components/ImageUploadButton";
 
 export default function NewPost() {
@@ -14,6 +15,7 @@ export default function NewPost() {
   const [content, setContent] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useTitle("发布新帖");
 
   useEffect(() => {
     getBoards().then((b) => setBoards(b));
