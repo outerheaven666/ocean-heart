@@ -79,6 +79,9 @@ export default function NewPost() {
         placeholder="正文(至少 5 字)。支持换行。"
         className="w-full border border-sea-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400"
       />
+      <p className="text-xs text-slate-400 -mt-2">
+        💡 想晒图?把图片链接(https 开头、jpg/png/webp 结尾)单独放一行,发布后会自动显示成图片。可用路过图床、SM.MS 等免费图床。
+      </p>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button
         onClick={submit}
