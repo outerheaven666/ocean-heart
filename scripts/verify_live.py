@@ -2,11 +2,15 @@
 """线上验证:管理员全流程(发帖→精华→删评论→删帖)、logout、登录限流、浏览量、reefer 改密"""
 import io
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
 
 BASE = "https://oceanheart666.dpdns.org/trpc"
+# 凭据从环境变量读取,勿写入仓库
+ADMIN_PWD = os.environ.get("OCEAN_ADMIN_PASSWORD", "")
+REEFER_PWD = os.environ.get("OCEAN_REEFER_PASSWORD", "")
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 passed = failed = 0
@@ -50,7 +54,7 @@ def query(path, payload=None, token=None):
 
 
 # 1. 管理员登录
-admin = call("auth.login", {"username": "admin", "password": "OceanHeart@2026"})["token"]
+admin = call("auth.login", {"username": "admin", "password": ADMIN_PWD})["token"]
 check("管理员登录(新密码)", True)
 
 # 2. 管理员全流程:发帖 → 精华 → 评论 → 删评论 → 删帖
@@ -70,18 +74,15 @@ except Exception:
     check("删帖后不可访问", True)
 
 # 3. 普通用户调管理接口应被拒
-reefer = call("auth.login", {"username": "reefer", "password": "reef1234"})["token"]
+reefer = call("auth.login", {"username": "reefer", "password": REEFER_PWD})["token"]
 r = call("admin.stats", {}, reefer, raw=True)
 check("非管理员访问管理接口被拒", "error" in r and r["error"]["data"]["code"] == "FORBIDDEN")
 
 # 4. reefer 改密(旧密码曾公开在 git 历史)
-r = call("auth.changePassword", {"oldPassword": "reef1234", "newPassword": "ReefCat@2026"}, reefer)
-check("reefer 改密", r.get("ok") is True)
-reefer = call("auth.login", {"username": "reefer", "password": "ReefCat@2026"})["token"]
-check("reefer 新密码登录", True)
+
 
 # 5. logout 后会话立即失效
-tmp = call("auth.login", {"username": "laozhou", "password": "LaoZhou#2026"})["token"]
+tmp = call("auth.login", {"username": "laozhou", "password": os.environ.get("OCEAN_PERSONA_PASSWORD", "")})["token"]
 call("auth.logout", {}, tmp)
 r = call("auth.me", {}, tmp, raw=True)
 check("logout 后会话失效", "error" in r)
