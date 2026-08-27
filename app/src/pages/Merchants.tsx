@@ -3,11 +3,13 @@ import { Link } from "react-router";
 import { BadgeCheck, Store } from "lucide-react";
 import { getMerchants } from "@/lib/data";
 import { fmtTime } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 type M = { id: number; name: string; categories: string; address: string; intro: string; wildPermitNo: string | null; createdAt: number };
 
 export default function Merchants() {
   const [items, setItems] = useState<M[]>([]);
+  useTitle("认证商家");
   useEffect(() => {
     getMerchants().then((r) => setItems(r as M[]));
   }, []);
