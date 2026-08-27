@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Search, ShieldAlert } from "lucide-react";
 import { getSpeciesCategories, getSpeciesList } from "@/lib/data";
 import { CATEGORY_LABEL, DIFFICULTY_LABEL, TEMPERAMENT_LABEL } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 export type Sp = {
   id: number; scientificName: string; commonNameZh: string; commonNameEn: string;
@@ -75,6 +76,7 @@ export default function Species() {
   const [tank, setTank] = useState(0);
   const [q, setQ] = useState("");
   const [counts, setCounts] = useState<Record<string, number>>({});
+  useTitle("生物资料库");
 
   useEffect(() => {
     getSpeciesCategories().then((rows) => {
