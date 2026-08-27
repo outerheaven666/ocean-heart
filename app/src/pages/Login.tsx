@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { Waves } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useTitle } from "@/lib/title";
 
 export default function Login() {
   const { login, register } = useAuth();
@@ -12,6 +13,7 @@ export default function Login() {
   const [nickname, setNickname] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useTitle(mode === "login" ? "登录" : "注册");
 
   const submit = async () => {
     setError("");
@@ -44,12 +46,12 @@ export default function Login() {
         {mode === "register" && (
           <input className={inputCls} placeholder="昵称(前台展示)" value={nickname} onChange={(e) => setNickname(e.target.value)} />
         )}
-        <input className={inputCls} type="password" placeholder="密码(至少 6 位)" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
+        <input className={inputCls} type="password" placeholder={mode === "register" ? "密码(至少 8 位)" : "密码"} value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && submit()} />
       </div>
       {error && <p className="text-sm text-red-500">{error}</p>}
       <button
         onClick={submit}
-        disabled={busy || username.trim().length < 3 || password.length < 6}
+        disabled={busy || username.trim().length < 3 || (mode === "register" && password.length < 8)}
         className="w-full bg-sea-700 hover:bg-sea-600 disabled:bg-slate-300 text-white py-2.5 rounded-lg transition"
       >
         {busy ? "处理中…" : mode === "login" ? "登录" : "注册并登录"}
@@ -57,7 +59,6 @@ export default function Login() {
       <p className="text-[11px] text-slate-400 text-center">
         注册即同意社区规范:发帖/回帖实行后台实名制;禁止发布保护野生动物交易信息。
       </p>
-      <p className="text-[11px] text-slate-300 text-center">演示账号:admin / admin123,reefer / reef1234</p>
     </div>
   );
 }
