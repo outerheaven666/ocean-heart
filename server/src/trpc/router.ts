@@ -7,20 +7,29 @@ import { db, schema } from "../db/index.js";
 // ---------- 上下文:解析登录态 ----------
 export interface Context {
   user: typeof schema.users.$inferSelect | null;
+  token: string | null;
   [key: string]: unknown;
 }
+
+const SESSION_TTL_MS = 30 * 86400_000; // 会话 30 天有效
 
 export async function createContext(headers: Record<string, string | string[] | undefined>): Promise<Context> {
   const auth = headers["authorization"];
   const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token) return { user: null };
+  if (!token) return { user: null, token: null };
   const row = await db
-    .select({ user: schema.users })
+    .select({ user: schema.users, sessionCreatedAt: schema.sessions.createdAt })
     .from(schema.sessions)
     .innerJoin(schema.users, eq(schema.sessions.userId, schema.users.id))
     .where(eq(schema.sessions.token, token))
     .get();
-  return { user: row?.user ?? null };
+  if (!row) return { user: null, token: null };
+  // 会话过期:作废并视为未登录
+  if (Date.now() - row.sessionCreatedAt > SESSION_TTL_MS) {
+    await db.delete(schema.sessions).where(eq(schema.sessions.token, token)).run();
+    return { user: null, token: null };
+  }
+  return { user: row.user, token };
 }
 
 const t = initTRPC.context<Context>().create();
@@ -28,6 +37,11 @@ const publicProc = t.procedure;
 const authedProc = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
   return next({ ctx: { ...ctx, user: ctx.user } });
+});
+// 管理员专属操作
+const adminProc = authedProc.use(({ ctx, next }) => {
+  if (ctx.user.role !== "admin") throw new TRPCError({ code: "FORBIDDEN", message: "需要管理员权限" });
+  return next({ ctx });
 });
 // 跟帖评论后台实名制:未实名禁止发帖/回帖
 const verifiedProc = authedProc.use(({ ctx, next }) => {
@@ -60,6 +74,19 @@ async function checkTradeCompliance(boardId: number, text: string) {
 
 const PAGE_SIZE = 20;
 
+// 登录限流:同一用户名 10 分钟内最多失败 5 次(内存计数,Serverless 冷启动自动重置,足够挡住脚本爆破)
+const loginFails = new Map<string, { count: number; resetAt: number }>();
+function checkLoginThrottle(username: string) {
+  const rec = loginFails.get(username);
+  if (rec && rec.resetAt > Date.now() && rec.count >= 5)
+    throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "尝试次数太多啦,喝口水休息一下,10 分钟后再试" });
+}
+function recordLoginFail(username: string) {
+  const rec = loginFails.get(username);
+  if (!rec || rec.resetAt <= Date.now()) loginFails.set(username, { count: 1, resetAt: Date.now() + 600_000 });
+  else rec.count += 1;
+}
+
 export const appRouter = t.router({
   // ---------- 认证与个人中心 ----------
   auth: t.router({
@@ -80,15 +107,45 @@ export const appRouter = t.router({
     login: publicProc
       .input(z.object({ username: z.string(), password: z.string() }))
       .mutation(async ({ input }) => {
+        checkLoginThrottle(input.username);
         const user = await db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
-        if (!user) throw new TRPCError({ code: "UNAUTHORIZED", message: "用户名或密码错误" });
+        const bad = new TRPCError({ code: "UNAUTHORIZED", message: "用户名或密码错误" });
+        if (!user) {
+          recordLoginFail(input.username);
+          throw bad;
+        }
         const [salt, stored] = user.passwordHash.split(":");
         const candidate = hashPassword(input.password, salt);
         const ok = timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(candidate, "hex"));
-        if (!ok) throw new TRPCError({ code: "UNAUTHORIZED", message: "用户名或密码错误" });
+        if (!ok) {
+          recordLoginFail(input.username);
+          throw bad;
+        }
+        loginFails.delete(input.username);
         const token = randomBytes(24).toString("hex");
         await db.insert(schema.sessions).values({ token, userId: user.id, createdAt: Date.now() }).run();
         return { token, user: { id: user.id, username: user.username, nickname: user.nickname, role: user.role, realName: user.realName } };
+      }),
+    logout: authedProc.mutation(async ({ ctx }) => {
+      if (ctx.token) await db.delete(schema.sessions).where(eq(schema.sessions.token, ctx.token)).run();
+      return { ok: true };
+    }),
+    changePassword: authedProc
+      .input(z.object({ oldPassword: z.string(), newPassword: z.string().min(8, "新密码至少 8 位,建议字母+数字组合") }))
+      .mutation(async ({ ctx, input }) => {
+        const [salt, stored] = ctx.user.passwordHash.split(":");
+        const candidate = hashPassword(input.oldPassword, salt);
+        if (!timingSafeEqual(Buffer.from(stored, "hex"), Buffer.from(candidate, "hex")))
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "原密码不对哦,再想想?" });
+        const newSalt = randomBytes(8).toString("hex");
+        await db
+          .update(schema.users)
+          .set({ passwordHash: `${newSalt}:${hashPassword(input.newPassword, newSalt)}` })
+          .where(eq(schema.users.id, ctx.user.id))
+          .run();
+        // 改密后作废该用户所有旧会话,只保留当前这个
+        await db.delete(schema.sessions).where(and(eq(schema.sessions.userId, ctx.user.id), sql`${schema.sessions.token} != ${ctx.token}`)).run();
+        return { ok: true };
       }),
     me: authedProc.query(async ({ ctx }) => {
       const { id, username, nickname, role, realName, createdAt } = ctx.user;
@@ -157,7 +214,6 @@ export const appRouter = t.router({
         return { items, total, page: input.page, pageSize: PAGE_SIZE };
       }),
     byId: publicProc.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
-      await db.update(schema.posts).set({ views: sql`${schema.posts.views} + 1` }).where(eq(schema.posts.id, input.id)).run();
       const post = await db
         .select({
           id: schema.posts.id,
@@ -186,6 +242,11 @@ export const appRouter = t.router({
         : false;
       return { ...post, liked, favorited };
     }),
+    // 浏览量单独计数:前端同一浏览器会话只对同一帖调一次,避免刷新/点赞刷量
+    view: publicProc.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
+      await db.update(schema.posts).set({ views: sql`${schema.posts.views} + 1` }).where(eq(schema.posts.id, input.id)).run();
+      return { ok: true };
+    }),
     create: verifiedProc
       .input(z.object({ boardSlug: z.string(), title: z.string().min(2).max(80), content: z.string().min(5).max(20000) }))
       .mutation(async ({ ctx, input }) => {
@@ -200,14 +261,14 @@ export const appRouter = t.router({
       }),
     toggleLike: authedProc.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
       const existing = await db.select().from(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).get();
-      if (existing) db.delete(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).run();
-      else db.insert(schema.likes).values({ userId: ctx.user.id, postId: input.postId }).run();
+      if (existing) await db.delete(schema.likes).where(and(eq(schema.likes.userId, ctx.user.id), eq(schema.likes.postId, input.postId))).run();
+      else await db.insert(schema.likes).values({ userId: ctx.user.id, postId: input.postId }).run();
       return { liked: !existing };
     }),
     toggleFavorite: authedProc.input(z.object({ postId: z.number() })).mutation(async ({ ctx, input }) => {
       const existing = await db.select().from(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).get();
-      if (existing) db.delete(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).run();
-      else db.insert(schema.favorites).values({ userId: ctx.user.id, postId: input.postId }).run();
+      if (existing) await db.delete(schema.favorites).where(and(eq(schema.favorites.userId, ctx.user.id), eq(schema.favorites.postId, input.postId))).run();
+      else await db.insert(schema.favorites).values({ userId: ctx.user.id, postId: input.postId }).run();
       return { favorited: !existing };
     }),
     mine: authedProc.query(async ({ ctx }) =>
@@ -345,6 +406,69 @@ export const appRouter = t.router({
     myApplication: authedProc.query(async ({ ctx }) =>
       await db.select().from(schema.merchants).where(eq(schema.merchants.userId, ctx.user.id)).orderBy(desc(schema.merchants.createdAt)).limit(1).get() ?? null
     ),
+  }),
+
+  // ---------- 管理后台(仅 admin) ----------
+  admin: t.router({
+    // 总览计数
+    stats: adminProc.query(async () => {
+      const count = async (table: any) => (await db.select({ c: sql<number>`count(*)` }).from(table).get())?.c ?? 0;
+      return {
+        users: await count(schema.users),
+        posts: await count(schema.posts),
+        comments: await count(schema.comments),
+        pendingMerchants: (await db.select({ c: sql<number>`count(*)` }).from(schema.merchants).where(eq(schema.merchants.status, "pending")).get())?.c ?? 0,
+      };
+    }),
+    // 设/撤精华
+    setEssence: adminProc.input(z.object({ postId: z.number(), isEssence: z.boolean() })).mutation(async ({ input }) => {
+      await db.update(schema.posts).set({ isEssence: input.isEssence ? 1 : 0 }).where(eq(schema.posts.id, input.postId)).run();
+      return { ok: true };
+    }),
+    // 删帖(连带清理评论/点赞/收藏)
+    deletePost: adminProc.input(z.object({ postId: z.number() })).mutation(async ({ input }) => {
+      await db.delete(schema.comments).where(eq(schema.comments.postId, input.postId)).run();
+      await db.delete(schema.likes).where(eq(schema.likes.postId, input.postId)).run();
+      await db.delete(schema.favorites).where(eq(schema.favorites.postId, input.postId)).run();
+      await db.delete(schema.posts).where(eq(schema.posts.id, input.postId)).run();
+      return { ok: true };
+    }),
+    // 删评论
+    deleteComment: adminProc.input(z.object({ commentId: z.number() })).mutation(async ({ input }) => {
+      await db.delete(schema.comments).where(eq(schema.comments.id, input.commentId)).run();
+      return { ok: true };
+    }),
+    // 商家审核:全部申请列表 + 通过/驳回
+    merchantApplications: adminProc.query(async () =>
+      await db
+        .select({
+          id: schema.merchants.id,
+          name: schema.merchants.name,
+          categories: schema.merchants.categories,
+          licenseNo: schema.merchants.licenseNo,
+          wildPermitNo: schema.merchants.wildPermitNo,
+          address: schema.merchants.address,
+          intro: schema.merchants.intro,
+          status: schema.merchants.status,
+          createdAt: schema.merchants.createdAt,
+          applicant: schema.users.nickname,
+        })
+        .from(schema.merchants)
+        .leftJoin(schema.users, eq(schema.merchants.userId, schema.users.id))
+        .orderBy(desc(schema.merchants.createdAt))
+        .all()
+    ),
+    reviewMerchant: adminProc
+      .input(z.object({ id: z.number(), approve: z.boolean() }))
+      .mutation(async ({ input }) => {
+        const m = await db.select().from(schema.merchants).where(eq(schema.merchants.id, input.id)).get();
+        if (!m) throw new TRPCError({ code: "NOT_FOUND", message: "申请不存在" });
+        await db.update(schema.merchants).set({ status: input.approve ? "approved" : "rejected" }).where(eq(schema.merchants.id, input.id)).run();
+        // 通过后把申请人角色升级为 merchant
+        if (input.approve && m.userId)
+          await db.update(schema.users).set({ role: "merchant" }).where(eq(schema.users.id, m.userId)).run();
+        return { ok: true, status: input.approve ? "approved" : "rejected" };
+      }),
   }),
 });
 
