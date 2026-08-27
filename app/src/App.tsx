@@ -13,6 +13,7 @@ import Merchants from "@/pages/Merchants";
 import MerchantApply from "@/pages/MerchantApply";
 import Profile from "@/pages/Profile";
 import Login from "@/pages/Login";
+import Admin from "@/pages/Admin";
 
 export default function App() {
   return (
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/merchant/apply" element={<MerchantApply />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/admin" element={<Admin />} />
         </Route>
       </Routes>
     </AuthProvider>
