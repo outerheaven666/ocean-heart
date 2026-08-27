@@ -5,13 +5,15 @@
 """
 import io
 import json
+import os
 import sys
 import urllib.parse
 import urllib.request
 
 BASE = "https://oceanheart666.dpdns.org/trpc"
-ADMIN = ("admin", "OceanHeart@2026")
-REEFER = ("reefer", "reef1234")
+# 敏感凭据从环境变量读取,不要写进仓库(本文件会被 push 到公开仓库)
+ADMIN = ("admin", os.environ.get("OCEAN_ADMIN_PASSWORD", ""))
+REEFER = ("reefer", os.environ.get("OCEAN_REEFER_PASSWORD", ""))
 
 
 def call(path, payload=None, token=None, method=None):
@@ -48,13 +50,15 @@ def try_call(path, payload=None, token=None):
 
 
 # ---------- 拟人化用户 ----------
+# 密码从环境变量读取(线上账号已轮换,明文不入库)
+PERSONA_PWD = os.environ.get("OCEAN_PERSONA_PASSWORD", "")
 PERSONAS = [
-    {"username": "laozhou", "password": "LaoZhou#2026", "nickname": "老周聊海缸", "realName": "周建军"},
-    {"username": "coralgirl", "password": "Coral#2026", "nickname": "珊瑚小姐姐", "realName": "林晓彤"},
-    {"username": "xiaobai", "password": "XiaoBai#2026", "nickname": "入海三个月", "realName": "王梓豪"},
-    {"username": "doctorfish", "password": "DocFish#2026", "nickname": "鱼大夫", "realName": "陈建国"},
-    {"username": "nanhai", "password": "NanHai#2026", "nickname": "南海渔夫", "realName": "黄海涛"},
-    {"username": "diting", "password": "DiTing#2026", "nickname": "滴定不手抖", "realName": "吴敏"},
+    {"username": "laozhou", "password": PERSONA_PWD, "nickname": "老周聊海缸", "realName": "周建军"},
+    {"username": "coralgirl", "password": PERSONA_PWD, "nickname": "珊瑚小姐姐", "realName": "林晓彤"},
+    {"username": "xiaobai", "password": PERSONA_PWD, "nickname": "入海三个月", "realName": "王梓豪"},
+    {"username": "doctorfish", "password": PERSONA_PWD, "nickname": "鱼大夫", "realName": "陈建国"},
+    {"username": "nanhai", "password": PERSONA_PWD, "nickname": "南海渔夫", "realName": "黄海涛"},
+    {"username": "diting", "password": PERSONA_PWD, "nickname": "滴定不手抖", "realName": "吴敏"},
 ]
 
 # ---------- 帖子: (作者, 版块, 标题, 正文) ----------
