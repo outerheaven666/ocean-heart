@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/lib/auth";
 import { friendlyError } from "@/lib/data";
+import { useTitle } from "@/lib/title";
 
 export default function MerchantApply() {
   const { me, loading } = useAuth();
@@ -11,6 +12,7 @@ export default function MerchantApply() {
   const [msg, setMsg] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  useTitle("商家入驻");
 
   if (loading) return <p className="text-slate-400 py-10 text-center">加载中…</p>;
   if (!me)
