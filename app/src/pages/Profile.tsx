@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
+import { ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
@@ -13,6 +14,9 @@ export default function Profile() {
   const [realName, setRealName] = useState("");
   const [msg, setMsg] = useState("");
   const [tab, setTab] = useState<"posts" | "favs">("posts");
+  const [oldPwd, setOldPwd] = useState("");
+  const [newPwd, setNewPwd] = useState("");
+  const [pwdMsg, setPwdMsg] = useState("");
 
   useEffect(() => {
     if (!me) return;
@@ -33,6 +37,18 @@ export default function Profile() {
     await trpc.auth.setRealName.mutate({ realName });
     setMsg("实名登记成功,现在可以发帖/回帖了。");
     await refresh();
+  };
+
+  const submitPwd = async () => {
+    setPwdMsg("");
+    try {
+      await trpc.auth.changePassword.mutate({ oldPassword: oldPwd, newPassword: newPwd });
+      setPwdMsg("密码改好啦,其他设备上的登录状态已失效,下次用新密码登录。");
+      setOldPwd("");
+      setNewPwd("");
+    } catch (e: any) {
+      setPwdMsg(e instanceof Error ? e.message : String(e));
+    }
   };
 
   const list = tab === "posts" ? posts : favs;
@@ -66,6 +82,47 @@ export default function Profile() {
           )}
           {msg && <p className="text-xs text-emerald-600 mt-2">{msg}</p>}
         </div>
+
+        <div className="bg-sea-50 rounded-lg p-4 mt-3">
+          <h2 className="text-sm font-bold text-sea-900 mb-3">修改密码</h2>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="password"
+              value={oldPwd}
+              onChange={(e) => setOldPwd(e.target.value)}
+              placeholder="现在的密码"
+              className="flex-1 border border-sea-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400"
+            />
+            <input
+              type="password"
+              value={newPwd}
+              onChange={(e) => setNewPwd(e.target.value)}
+              placeholder="新密码(至少 8 位)"
+              className="flex-1 border border-sea-200 rounded-lg p-2 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400"
+            />
+            <button
+              onClick={submitPwd}
+              disabled={!oldPwd || newPwd.length < 8}
+              className="bg-sea-700 hover:bg-sea-600 disabled:bg-slate-300 text-white text-sm px-4 py-2 rounded-lg transition"
+            >
+              确认修改
+            </button>
+          </div>
+          {pwdMsg && <p className="text-xs mt-2 text-slate-500">{pwdMsg}</p>}
+        </div>
+
+        {me.role === "admin" && (
+          <Link
+            to="/admin"
+            className="mt-3 flex items-center gap-2 bg-sea-900 text-white rounded-lg p-4 hover:bg-sea-800 transition"
+          >
+            <ShieldCheck className="w-5 h-5 text-sand-300" />
+            <div>
+              <p className="text-sm font-bold">管理工作台</p>
+              <p className="text-xs text-sea-300">商家审核 · 数据总览(精华/删帖在帖子页直接操作)</p>
+            </div>
+          </Link>
+        )}
       </div>
 
       <div className="bg-white rounded-xl border border-sea-100 p-6">
