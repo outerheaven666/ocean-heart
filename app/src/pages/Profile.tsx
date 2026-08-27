@@ -4,6 +4,7 @@ import { ShieldCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 type MyPost = { id: number; title: string; createdAt: number; views: number };
 
@@ -13,6 +14,8 @@ export default function Profile() {
   const [favs, setFavs] = useState<MyPost[]>([]);
   const [realName, setRealName] = useState("");
   const [msg, setMsg] = useState("");
+  const [realNameErr, setRealNameErr] = useState("");
+  useTitle("个人中心");
   const [tab, setTab] = useState<"posts" | "favs">("posts");
   const [oldPwd, setOldPwd] = useState("");
   const [newPwd, setNewPwd] = useState("");
@@ -34,9 +37,15 @@ export default function Profile() {
     );
 
   const submitRealName = async () => {
-    await trpc.auth.setRealName.mutate({ realName });
-    setMsg("实名登记成功,现在可以发帖/回帖了。");
-    await refresh();
+    setRealNameErr("");
+    setMsg("");
+    try {
+      await trpc.auth.setRealName.mutate({ realName });
+      setMsg("实名登记成功,现在可以发帖/回帖了。");
+      await refresh();
+    } catch (e) {
+      setRealNameErr(e instanceof Error ? e.message : "提交失败,请重试");
+    }
   };
 
   const submitPwd = async () => {
@@ -81,6 +90,7 @@ export default function Profile() {
             </div>
           )}
           {msg && <p className="text-xs text-emerald-600 mt-2">{msg}</p>}
+          {realNameErr && <p className="text-xs text-red-500 mt-2">{realNameErr}</p>}
         </div>
 
         <div className="bg-sea-50 rounded-lg p-4 mt-3">
