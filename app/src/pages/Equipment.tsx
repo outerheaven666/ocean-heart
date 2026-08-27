@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getEquipmentCategories, getEquipmentList } from "@/lib/data";
+import { useTitle } from "@/lib/title";
 
 type Eq = { id: number; category: string; brand: string; model: string; keyParams: string; description: string; imageUrl: string };
 
@@ -7,6 +8,7 @@ export default function Equipment() {
   const [cats, setCats] = useState<{ category: string; c: number }[]>([]);
   const [cat, setCat] = useState("");
   const [items, setItems] = useState<Eq[]>([]);
+  useTitle("设备资料库");
 
   useEffect(() => {
     getEquipmentCategories().then((r) => setCats(r));
