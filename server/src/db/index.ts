@@ -134,7 +134,23 @@ CREATE TABLE IF NOT EXISTS forum_links (
   species_id INTEGER NOT NULL,
   post_id INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  mime TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 `;
+
+// 增量迁移:既有库 probe 会跳过全量 DDL,新表需要每次单独确保存在(幂等,一次往返)
+const DDL_IMAGES = `CREATE TABLE IF NOT EXISTS images (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  mime TEXT NOT NULL,
+  data TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+)`;
 
 // 数据库初始化(建表)。任何查询发生前必须 await dbReady。
 // 先做一次轻量探测:表已存在则跳过全量 DDL(Turso 上 sequence 建表较慢,约几十秒),
@@ -142,6 +158,8 @@ CREATE TABLE IF NOT EXISTS forum_links (
 export const dbReady: Promise<void> = (async () => {
   try {
     await client.execute("SELECT 1 FROM users LIMIT 1");
+    // 既有库:确保增量表存在(如 images)
+    await client.execute(DDL_IMAGES);
   } catch {
     try {
       await client.executeMultiple(DDL);
