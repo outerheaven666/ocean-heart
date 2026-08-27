@@ -42,28 +42,42 @@ export default function Home() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [total, setTotal] = useState(0);
   const [q, setQ] = useState("");
+  const [activeQ, setActiveQ] = useState(""); // 实际生效的搜索词
+  const [page, setPage] = useState(1);
   const [fallback, setFallback] = useState(false);
   const navigate = useNavigate();
+  const pageSize = 20;
 
   useEffect(() => {
     getBoards().then((b) => {
       setBoards(b as Board[]);
       setFallback(isFallbackMode());
     });
-    getPosts({ page: 1 }).then((r) => {
+  }, []);
+
+  useEffect(() => {
+    getPosts({ q: activeQ || undefined, page }).then((r) => {
       setPosts(r.items as Post[]);
       setTotal(r.total);
       setFallback(isFallbackMode());
     });
-  }, []);
+  }, [page, activeQ]);
+
+  // 清空搜索框时自动恢复全部帖子,不用刷新页面
+  useEffect(() => {
+    if (!q.trim() && activeQ) {
+      setActiveQ("");
+      setPage(1);
+    }
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const search = () => {
     if (!q.trim()) return;
-    getPosts({ q: q.trim(), page: 1 }).then((r) => {
-      setPosts(r.items as Post[]);
-      setTotal(r.total);
-    });
+    setPage(1);
+    setActiveQ(q.trim());
   };
+
+  const pages = Math.max(1, Math.ceil(total / pageSize));
 
   return (
     <div className="space-y-6">
@@ -120,15 +134,28 @@ export default function Home() {
       {/* 帖子流 */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-bold text-sea-900">最新讨论</h2>
+          <h2 className="font-bold text-sea-900">{activeQ ? `搜索「${activeQ}」` : "最新讨论"}</h2>
           <span className="text-xs text-slate-400">共 {total} 帖</span>
         </div>
         <div className="space-y-3">
           {posts.map((p) => (
             <PostItem key={p.id} p={p} />
           ))}
-          {posts.length === 0 && <p className="text-sm text-slate-400 py-8 text-center">暂无帖子</p>}
+          {posts.length === 0 && <p className="text-sm text-slate-400 py-8 text-center">{activeQ ? "没有搜到相关帖子,换个词试试" : "暂无帖子"}</p>}
         </div>
+        {pages > 1 && (
+          <div className="flex justify-center gap-2 pt-4">
+            {Array.from({ length: pages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i + 1)}
+                className={`px-3 py-1 rounded text-sm ${page === i + 1 ? "bg-sea-700 text-white" : "bg-white border border-sea-200 text-sea-700"}`}
+              >
+                {i + 1}
+              </button>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
