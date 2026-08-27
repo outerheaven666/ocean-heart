@@ -6,6 +6,8 @@ import { trpcServer } from "@hono/trpc-server";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { appRouter, createContext } from "../../server/src/trpc/router.js";
 import { seedIfEmpty } from "../../server/src/db/seed.js";
+import { db, schema } from "../../server/src/db/index.js";
+import { eq } from "drizzle-orm";
 
 // 冷启动初始化:建表 + 空库灌种子(只执行一次),带阶段状态便于诊断
 let initStage = "created";
@@ -24,6 +26,18 @@ const init: Promise<unknown> = (async () => {
 // 注意:Vercel 调用函数时传入的是原始路径(/trpc/*,不含 /api 前缀),
 // 且 rewrite 已把 /trpc/* 映射到本函数,因此路由直接按 /trpc/* 声明,不要 basePath("/api")。
 const app = new Hono();
+
+// 用户上传的图片(永久 CDN 缓存:内容不可变)
+app.get("/img/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id <= 0) return c.text("bad id", 400);
+  const row = await db.select().from(schema.images).where(eq(schema.images.id, id)).get();
+  if (!row) return c.text("图片不存在或已被删除", 404);
+  return c.body(Buffer.from(row.data, "base64"), 200, {
+    "content-type": row.mime,
+    "cache-control": "public, max-age=31536000, immutable",
+  });
+});
 
 app.use("/trpc/*", cors({ origin: "*", allowHeaders: ["Content-Type", "Authorization"] }));
 
