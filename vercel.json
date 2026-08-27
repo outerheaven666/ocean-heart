@@ -4,7 +4,7 @@
   "outputDirectory": "app/dist",
   "rewrites": [
     { "source": "/trpc/:path*", "destination": "/api/trpc/:path*" },
-    { "source": "/img/:path*", "destination": "/api/trpc/img/:path*" },
+    { "source": "/img/:path*", "destination": "/api/img" },
     { "source": "/((?!api|assets|favicon|img).*)", "destination": "/index.html" }
   ]
 }
