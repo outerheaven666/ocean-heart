@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router";
-import { ThumbsUp, Star, Eye, Award } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router";
+import { ThumbsUp, Star, Eye, Award, Trash2, BadgeCheck } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { getPost, getComments, isFallbackMode, friendlyError } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
@@ -13,10 +13,48 @@ type Post = {
 };
 type Comment = { id: number; content: string; createdAt: number; author: string; authorRole: string };
 
+const IMG_LINE = /^(?:!\[.*?\]\()?https?:\/\/\S+?\.(?:png|jpe?g|gif|webp)(?:\?\S*)?\)?$/i;
+
+// 正文渲染:普通文字按换行展示,独占一行的图片链接(或 markdown 图片语法)渲染成图
+function RichContent({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="text-sm leading-7 text-slate-700">
+      {lines.map((line, i) => {
+        const t = line.trim();
+        if (IMG_LINE.test(t)) {
+          const url = t.replace(/^!\[.*?\]\(/, "").replace(/\)$/, "");
+          return (
+            <img
+              key={i}
+              src={url}
+              alt="帖子配图"
+              loading="lazy"
+              className="my-3 max-w-full max-h-96 rounded-lg border border-sea-100 object-contain bg-sea-50"
+              onError={(e) => {
+                // 图挂了就降级成链接,不留破图
+                const el = e.currentTarget;
+                const a = document.createElement("a");
+                a.href = url;
+                a.textContent = url;
+                a.className = "text-sea-600 underline break-all";
+                a.target = "_blank";
+                el.replaceWith(a);
+              }}
+            />
+          );
+        }
+        return <p key={i} className="min-h-[1em] whitespace-pre-wrap break-words">{line}</p>;
+      })}
+    </div>
+  );
+}
+
 export default function PostDetail() {
   const { id } = useParams();
   const postId = Number(id);
   const { me } = useAuth();
+  const navigate = useNavigate();
   const [post, setPost] = useState<Post | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [draft, setDraft] = useState("");
@@ -28,7 +66,18 @@ export default function PostDetail() {
   };
   useEffect(load, [postId]);
 
+  // 浏览量:同一浏览器会话对同一帖只计一次,刷新/点赞不涨量
+  useEffect(() => {
+    if (isFallbackMode()) return;
+    const key = `viewed:${postId}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    trpc.posts.view.mutate({ id: postId }).catch(() => {});
+  }, [postId]);
+
   if (!post) return <p className="text-slate-400 py-10 text-center">加载中…</p>;
+
+  const isAdmin = me?.role === "admin";
 
   const toggleLike = async () => {
     if (isFallbackMode()) return setError("静态演示模式下无法点赞,需要完整后端服务");
@@ -57,6 +106,23 @@ export default function PostDetail() {
     }
   };
 
+  // ---------- 管理操作 ----------
+  const toggleEssence = async () => {
+    await trpc.admin.setEssence.mutate({ postId, isEssence: post.isEssence !== 1 });
+    const p = await getPost(postId);
+    setPost(p as Post);
+  };
+  const removePost = async () => {
+    if (!window.confirm("确定删除这个帖子吗?评论、点赞、收藏会一起清掉,不可恢复。")) return;
+    await trpc.admin.deletePost.mutate({ postId });
+    navigate(`/board/${post.boardSlug}`);
+  };
+  const removeComment = async (commentId: number) => {
+    if (!window.confirm("确定删除这条回帖吗?")) return;
+    await trpc.admin.deleteComment.mutate({ commentId });
+    getComments(postId).then((c) => setComments(c as Comment[]));
+  };
+
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
       <article className="bg-white rounded-xl border border-sea-100 p-6">
@@ -72,8 +138,8 @@ export default function PostDetail() {
           <span className="flex items-center gap-1 ml-auto"><Eye className="w-3.5 h-3.5" />{post.views}</span>
         </div>
         <h1 className="text-xl font-bold text-sea-900 mb-4">{post.title}</h1>
-        <div className="text-sm leading-7 text-slate-700 whitespace-pre-wrap">{post.content}</div>
-        <div className="flex gap-3 mt-6 pt-4 border-t border-sea-100">
+        <RichContent text={post.content} />
+        <div className="flex flex-wrap gap-3 mt-6 pt-4 border-t border-sea-100">
           <button
             onClick={toggleLike}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm border transition ${post.liked ? "bg-sea-700 text-white border-sea-700" : "border-sea-200 text-sea-700 hover:bg-sea-50"}`}
@@ -86,6 +152,22 @@ export default function PostDetail() {
           >
             <Star className="w-4 h-4" /> {post.favorited ? "已收藏" : "收藏"}
           </button>
+          {isAdmin && (
+            <span className="flex gap-2 ml-auto">
+              <button
+                onClick={toggleEssence}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border border-sand-400 text-sand-500 hover:bg-sand-100 transition"
+              >
+                <BadgeCheck className="w-3.5 h-3.5" /> {post.isEssence === 1 ? "取消精华" : "设为精华"}
+              </button>
+              <button
+                onClick={removePost}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs border border-red-200 text-red-500 hover:bg-red-50 transition"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> 删帖
+              </button>
+            </span>
+          )}
         </div>
       </article>
 
@@ -94,9 +176,14 @@ export default function PostDetail() {
         <div className="space-y-4">
           {comments.map((c, i) => (
             <div key={c.id} className="border-b border-sea-50 last:border-0 pb-3">
-              <div className="text-xs text-slate-500 mb-1">
+              <div className="text-xs text-slate-500 mb-1 flex items-center gap-1">
                 <span className={c.authorRole === "admin" ? "text-sea-600 font-medium" : "text-slate-700"}>{c.author}</span>
                 {" · "}{fmtTime(c.createdAt)} · {i + 1} 楼
+                {isAdmin && (
+                  <button onClick={() => removeComment(c.id)} className="ml-auto text-red-400 hover:text-red-600" title="删除此回帖">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
               <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.content}</p>
             </div>
@@ -113,7 +200,7 @@ export default function PostDetail() {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={3}
-            placeholder={me ? "写下你的回复…" : "登录后才能回帖"}
+            placeholder={me ? "友善交流,分享你的经验…" : "登录后才能回帖"}
             disabled={!me}
             className="w-full border border-sea-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400 disabled:bg-slate-50"
           />
