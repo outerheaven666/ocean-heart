@@ -4,6 +4,7 @@ import { ShieldCheck, Users, FileText, MessageSquare, Store } from "lucide-react
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
+import { useTitle } from "@/lib/title";
 
 type Stats = { users: number; posts: number; comments: number; pendingMerchants: number };
 type Application = {
@@ -22,6 +23,7 @@ export default function Admin() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [apps, setApps] = useState<Application[]>([]);
   const [msg, setMsg] = useState("");
+  useTitle("管理工作台");
 
   const load = () => {
     trpc.admin.stats.query().then((s) => setStats(s as Stats)).catch(() => {});
