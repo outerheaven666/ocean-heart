@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
 import { getBoards, getPosts } from "@/lib/data";
 import { PostItem } from "./Home";
+import { useTitle } from "@/lib/title";
 
 type Post = Parameters<typeof PostItem>[0]["p"];
 
@@ -12,6 +13,7 @@ export default function Board() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const pageSize = 20;
+  useTitle(boardName || "版块");
 
   useEffect(() => {
     setPage(1);
