@@ -103,6 +103,7 @@ export const equipment = sqliteTable("equipment", {
   model: text("model").notNull(),
   keyParams: text("key_params").notNull().default("{}"), // JSON 选购参数
   description: text("description").notNull().default(""),
+  imageUrl: text("image_url").notNull().default(""),
 });
 
 // ---------- 商家(入驻申请 -> 资质核验 -> 认证展示) ----------
