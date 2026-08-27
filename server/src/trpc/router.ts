@@ -32,7 +32,43 @@ export async function createContext(headers: Record<string, string | string[] | 
   return { user: row.user, token };
 }
 
-const t = initTRPC.context<Context>().create();
+// 字段名中文化(zod 校验错误用)
+const FIELD_ZH: Record<string, string> = {
+  username: "用户名", password: "密码", nickname: "昵称", title: "标题", content: "内容",
+  realName: "真实姓名", oldPassword: "原密码", newPassword: "新密码", postId: "帖子",
+  commentId: "回帖", id: "ID", boardSlug: "版块", data: "图片数据", mime: "图片格式",
+  name: "名称", categories: "经营品类", licenseNo: "营业执照号", wildPermitNo: "许可证号",
+  address: "地址", intro: "简介", q: "搜索词", page: "页码", category: "分类",
+  difficulty: "难度", tradeStatus: "可交易性", minTankMax: "缸体", tankType: "缸型",
+  isEssence: "精华标记", approve: "审核结果",
+};
+
+// zod issue -> 用户可读的中文提示(不再把英文 JSON 原文抛给用户)
+function zhIssue(i: { path: (string | number)[]; code: string; type?: string; minimum?: number | bigint; maximum?: number | bigint; message?: string }): string {
+  const key = i.path.join(".");
+  const field = FIELD_ZH[key] ?? (key || "输入内容");
+  switch (i.code) {
+    case "too_small":
+      return i.type === "string" ? `${field}太短了,至少 ${i.minimum} 个字符` : `${field}不能小于 ${i.minimum}`;
+    case "too_big":
+      return i.type === "string" ? `${field}太长了,最多 ${i.maximum} 个字符` : `${field}不能大于 ${i.maximum}`;
+    case "invalid_enum_value":
+      return `${field}的取值不在允许范围内`;
+    case "invalid_type":
+      return `${field}格式不正确`;
+    default:
+      return `${field}不符合要求(${i.message ?? i.code})`;
+  }
+}
+
+const t = initTRPC.context<Context>().create({
+  // 统一格式化输入校验错误:zod 英文 JSON -> 中文人话
+  errorFormatter({ shape, error }) {
+    const cause = error.cause as { issues?: Parameters<typeof zhIssue>[0][] } | undefined;
+    if (cause?.issues?.length) return { ...shape, message: zhIssue(cause.issues[0]) };
+    return shape;
+  },
+});
 const publicProc = t.procedure;
 const authedProc = t.procedure.use(({ ctx, next }) => {
   if (!ctx.user) throw new TRPCError({ code: "UNAUTHORIZED", message: "请先登录" });
@@ -91,7 +127,7 @@ export const appRouter = t.router({
   // ---------- 认证与个人中心 ----------
   auth: t.router({
     register: publicProc
-      .input(z.object({ username: z.string().min(3).max(20), password: z.string().min(6), nickname: z.string().min(1).max(20) }))
+      .input(z.object({ username: z.string().min(3).max(20), password: z.string().min(8), nickname: z.string().min(1).max(20) }))
       .mutation(async ({ input }) => {
         const exists = await db.select().from(schema.users).where(eq(schema.users.username, input.username)).get();
         if (exists) throw new TRPCError({ code: "CONFLICT", message: "用户名已存在" });
