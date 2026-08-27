@@ -5,6 +5,7 @@ import { trpc } from "@/lib/trpc";
 import { getPost, getComments, isFallbackMode, friendlyError } from "@/lib/data";
 import { useAuth } from "@/lib/auth";
 import { fmtTime } from "@/lib/format";
+import ImageUploadButton from "@/components/ImageUploadButton";
 
 type Post = {
   id: number; title: string; content: string; views: number; isEssence: number; createdAt: number;
@@ -13,7 +14,8 @@ type Post = {
 };
 type Comment = { id: number; content: string; createdAt: number; author: string; authorRole: string };
 
-const IMG_LINE = /^(?:!\[.*?\]\()?https?:\/\/\S+?\.(?:png|jpe?g|gif|webp)(?:\?\S*)?\)?$/i;
+// 支持外链图片(https…jpg/png/webp/gif)与站内上传图(/img/123)
+const IMG_LINE = /^(?:!\[.*?\]\()?(?:https?:\/\/\S+?\.(?:png|jpe?g|gif|webp)(?:\?\S*)?|\/img\/\d+)\)?$/i;
 
 // 正文渲染:普通文字按换行展示,独占一行的图片链接(或 markdown 图片语法)渲染成图
 function RichContent({ text }: { text: string }) {
@@ -185,7 +187,7 @@ export default function PostDetail() {
                   </button>
                 )}
               </div>
-              <p className="text-sm text-slate-700 whitespace-pre-wrap">{c.content}</p>
+              <RichContent text={c.content} />
             </div>
           ))}
           {comments.length === 0 && <p className="text-sm text-slate-400">还没有回帖,来抢沙发。</p>}
@@ -205,13 +207,21 @@ export default function PostDetail() {
             className="w-full border border-sea-200 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-sea-400 disabled:bg-slate-50"
           />
           {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
-          <button
-            onClick={submitComment}
-            disabled={!me || draft.trim().length === 0}
-            className="mt-2 bg-sea-700 hover:bg-sea-600 disabled:bg-slate-300 text-white text-sm px-5 py-2 rounded-lg transition"
-          >
-            发表回复
-          </button>
+          <div className="flex items-center gap-3 mt-2">
+            <button
+              onClick={submitComment}
+              disabled={!me || draft.trim().length === 0}
+              className="bg-sea-700 hover:bg-sea-600 disabled:bg-slate-300 text-white text-sm px-5 py-2 rounded-lg transition"
+            >
+              发表回复
+            </button>
+            {me && (
+              <ImageUploadButton
+                disabled={!me}
+                onUploaded={(md) => setDraft((d) => (d ? d + "\n" : "") + md)}
+              />
+            )}
+          </div>
         </div>
       </section>
     </div>
