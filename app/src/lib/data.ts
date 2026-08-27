@@ -25,7 +25,9 @@ export function friendlyError(e: unknown): string {
 
 async function withFallback<T>(remote: () => Promise<T>, local: () => unknown): Promise<T> {
   try {
-    return await remote();
+    const r = await remote();
+    fallbackUsed = false; // 后端恢复后自动退出演示模式,避免偶发抖动粘性禁用互动
+    return r;
   } catch {
     fallbackUsed = true;
     return local() as T;
