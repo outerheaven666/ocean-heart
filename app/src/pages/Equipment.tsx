@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getEquipmentCategories, getEquipmentList } from "@/lib/data";
 
-type Eq = { id: number; category: string; brand: string; model: string; keyParams: string; description: string };
+type Eq = { id: number; category: string; brand: string; model: string; keyParams: string; description: string; imageUrl: string };
 
 export default function Equipment() {
   const [cats, setCats] = useState<{ category: string; c: number }[]>([]);
@@ -41,6 +41,14 @@ export default function Equipment() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         {items.map((e) => (
           <div key={e.id} className="bg-white rounded-lg border border-sea-100 p-4">
+            {e.imageUrl && (
+              <img
+                src={e.imageUrl}
+                alt={e.model}
+                loading="lazy"
+                className="w-full h-36 object-cover rounded-md mb-2 bg-sea-50"
+              />
+            )}
             <div className="flex items-center gap-2 mb-1">
               <span className="bg-sea-100 text-sea-700 text-xs px-2 py-0.5 rounded">{e.category}</span>
               <span className="text-xs text-slate-400">{e.brand}</span>
