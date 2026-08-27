@@ -77,6 +77,15 @@ export default function Layout() {
               {n.label}
             </NavLink>
           ))}
+          {/* 移动端也要有发帖入口,否则手机用户无处可发 */}
+          <NavLink
+            to="/new"
+            className={({ isActive }) =>
+              `whitespace-nowrap px-3 py-1 rounded-md font-medium ${isActive ? "bg-sand-500 text-sea-950" : "bg-sand-400 text-sea-950"}`
+            }
+          >
+            ✏️ 发帖
+          </NavLink>
         </nav>
       </header>
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
