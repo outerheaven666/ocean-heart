@@ -290,6 +290,23 @@ export const appRouter = t.router({
     ),
   }),
 
+  // ---------- 图片上传(base64 入库,经 GET /img/:id 取用) ----------
+  images: t.router({
+    upload: verifiedProc
+      .input(
+        z.object({
+          mime: z.enum(["image/jpeg", "image/png", "image/webp", "image/gif"]),
+          data: z.string().max(600_000, "图片太大了,请压缩后再传(建议 400KB 以内)"), // base64,≈440KB 原图
+        })
+      )
+      .mutation(async ({ ctx, input }) => {
+        const id = Number(
+          (await db.insert(schema.images).values({ userId: ctx.user.id, mime: input.mime, data: input.data, createdAt: Date.now() }).run()).lastInsertRowid
+        );
+        return { id, url: `/img/${id}` };
+      }),
+  }),
+
   // ---------- 评论 ----------
   comments: t.router({
     list: publicProc.input(z.object({ postId: z.number() })).query(async ({ input }) =>
