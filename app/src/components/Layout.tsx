@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router";
-import { Waves, User, LogOut, PenSquare } from "lucide-react";
+import { Waves, User, LogOut, PenSquare, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 
 const NAV = [
@@ -44,6 +44,11 @@ export default function Layout() {
             </button>
             {me ? (
               <>
+                {me.role === "admin" && (
+                  <Link to="/admin" className="text-sand-300 hover:text-white p-1.5" title="管理工作台">
+                    <ShieldCheck className="w-4 h-4" />
+                  </Link>
+                )}
                 <Link to="/profile" className="flex items-center gap-1 text-sea-200 hover:text-white px-2 py-1.5">
                   <User className="w-4 h-4" /> {me.nickname}
                   {!me.realName && <span className="text-xs text-sand-300">(未实名)</span>}
