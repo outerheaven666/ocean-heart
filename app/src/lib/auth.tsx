@@ -75,6 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const logout = useCallback(() => {
+    // 通知后端作废会话(失败也不影响本地退出)
+    trpc.auth.logout.mutate().catch(() => {});
     localStorage.removeItem(TOKEN_KEY);
     setMe(null);
   }, []);
