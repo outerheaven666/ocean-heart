@@ -5,6 +5,6 @@
   "rewrites": [
     { "source": "/trpc/:path*", "destination": "/api/trpc/:path*" },
     { "source": "/img/:path*", "destination": "/api/img" },
-    { "source": "/((?!api|assets|favicon|img).*)", "destination": "/index.html" }
+    { "source": "/((?!api|assets|favicon|img|robots\\.txt|sitemap\\.xml).*)", "destination": "/index.html" }
   ]
 }
