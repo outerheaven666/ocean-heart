@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /trpc/
+
+Sitemap: https://oceanheart666.dpdns.org/sitemap.xml
